@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Timer de rounds para artes marciais no Meta Ray-Ban Display - rounds, descanso, beep e flash visual.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Round Timer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 600px; height: 600px; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    #app { width: 600px; height: 600px; position: relative; }
+
+    .screen { position: absolute; inset: 0; display: none;
+      flex-direction: column; align-items: center; }
+    .screen.active { display: flex; }
+
+    h1 { font-size: 34px; color: #00d4ff; margin-top: 28px; }
+    .focusable { transition: all 150ms ease; border: 2px solid #333;
+      min-height: 88px; outline: none; }
+    .focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    button.focusable {
+      background: #111; color: #fff; font-size: 22px; font-weight: 600;
+      padding: 0 30px; border-radius: 16px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+    }
+
+    /* Config */
+    #config .rows { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; width: 500px; }
+    .row { display: flex; align-items: center; justify-content: space-between;
+      background: #0d0d0d; border: 2px solid #333; border-radius: 16px;
+      min-height: 84px; padding: 0 22px; }
+    .row.focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    .row .lbl { font-size: 22px; color: #ddd; }
+    .row .ctl { display: flex; align-items: center; gap: 18px; }
+    .row .val { font-size: 30px; font-weight: 800; color: #00e0ff; min-width: 96px; text-align: center;
+      font-variant-numeric: tabular-nums; }
+    .row .hintk { font-size: 14px; color: #666; }
+    #startBtn { margin-top: 20px; min-width: 320px; }
+
+    /* Run */
+    #run { justify-content: center; gap: 6px; }
+    #phase { font-size: 40px; font-weight: 800; letter-spacing: 3px; }
+    #phase.work { color: #2ecc71; } #phase.rest { color: #ffb020; } #phase.ready { color: #00d4ff; }
+    #clock { font-size: 180px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    #roundInfo { font-size: 26px; color: #aaa; margin-top: 4px; }
+    #runControls { margin-top: 34px; display: flex; gap: 16px; }
+    #runControls button.focusable { min-height: 64px; font-size: 19px; padding: 0 26px; }
+
+    /* Flash overlay */
+    #flash { position: absolute; inset: 0; background: #2ecc71; opacity: 0; z-index: 50;
+      pointer-events: none; transition: opacity 90ms; }
+    #flash.show { opacity: 0.85; }
+
+    .hidden { display: none !important; }
+    .sub { font-size: 16px; color: #777; margin-top: 8px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="flash"></div>
+
+    <!-- CONFIG -->
+    <div id="config" class="screen active">
+      <h1>Round Timer</h1>
+      <div class="sub">Ajuste com ◀ ▶ · role com ▲ ▼ · Enter para iniciar</div>
+      <div class="rows">
+        <div class="row focusable" data-key="rounds">
+          <span class="lbl">Rounds</span>
+          <div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-rounds">5</span></div>
+        </div>
+        <div class="row focusable" data-key="work">
+          <span class="lbl">Round (luta)</span>
+          <div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-work">3:00</span></div>
+        </div>
+        <div class="row focusable" data-key="rest">
+          <span class="lbl">Descanso</span>
+          <div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-rest">1:00</span></div>
+        </div>
+        <div class="row focusable" data-key="prep">
+          <span class="lbl">Preparação inicial</span>
+          <div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-prep">0:10</span></div>
+        </div>
+      </div>
+      <button id="startBtn" class="focusable">▶  Iniciar</button>
+    </div>
+
+    <!-- RUN -->
+    <div id="run" class="screen">
+      <div id="phase" class="ready">PREPARE</div>
+      <div id="clock">0:10</div>
+      <div id="roundInfo">Round 1 / 5</div>
+      <div id="runControls">
+        <button id="pauseBtn" class="focusable">Pausar</button>
+        <button id="stopBtn" class="focusable">Parar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var DPAD = { UP:'ArrowUp', DOWN:'ArrowDown', LEFT:'ArrowLeft', RIGHT:'ArrowRight', SELECT:'Enter' };
+
+    // ---- Beep (Web Audio) + flash visual ----
+    var audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){ audioCtx = null; }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function beep(freq, durMs, when) {
+      if (!audioCtx) return;
+      try {
+        var t = audioCtx.currentTime + (when || 0);
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'square'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + durMs/1000);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(t); osc.stop(t + durMs/1000 + 0.02);
+      } catch(e){}
+    }
+    var flashEl = document.getElementById('flash');
+    function flash(color) {
+      flashEl.style.background = color || '#2ecc71';
+      flashEl.classList.add('show');
+      setTimeout(function(){ flashEl.classList.remove('show'); }, 320);
+    }
+    function signalRoundStart() { flash('#2ecc71'); beep(880,150); beep(1320,200,0.18); }
+    function signalRest()       { flash('#ffb020'); beep(440,250); }
+    function signalEnd()        { flash('#00d4ff'); beep(660,150); beep(660,150,0.2); beep(990,400,0.4); }
+    function tickWarn()         { beep(700,90); }  // últimos 3 segundos
+
+    // ---- Config / estado ----
+    var cfg = { rounds: 5, work: 180, rest: 60, prep: 10 };
+
+    function fmt(s) {
+      var m = Math.floor(s/60), r = s%60;
+      return m + ':' + String(r).padStart(2,'0');
+    }
+    function renderConfig() {
+      document.getElementById('v-rounds').textContent = cfg.rounds;
+      document.getElementById('v-work').textContent = fmt(cfg.work);
+      document.getElementById('v-rest').textContent = fmt(cfg.rest);
+      document.getElementById('v-prep').textContent = fmt(cfg.prep);
+    }
+    function adjust(key, dir) {
+      if (key === 'rounds') cfg.rounds = Math.max(1, Math.min(99, cfg.rounds + dir));
+      if (key === 'work')   cfg.work   = Math.max(10, Math.min(900, cfg.work + dir*15));
+      if (key === 'rest')   cfg.rest   = Math.max(0,  Math.min(600, cfg.rest + dir*15));
+      if (key === 'prep')   cfg.prep   = Math.max(0,  Math.min(60,  cfg.prep + dir*5));
+      renderConfig();
+    }
+
+    // ---- Execução ----
+    var configScreen = document.getElementById('config');
+    var runScreen = document.getElementById('run');
+    var phaseEl = document.getElementById('phase');
+    var clockEl = document.getElementById('clock');
+    var roundInfoEl = document.getElementById('roundInfo');
+    var pauseBtn = document.getElementById('pauseBtn');
+
+    var timer = null, paused = false;
+    var phase = 'prep', round = 1, remaining = 0;
+
+    function setPhase(p) {
+      phase = p;
+      phaseEl.className = (p === 'work') ? 'work' : (p === 'rest') ? 'rest' : 'ready';
+      phaseEl.textContent = p === 'prep' ? 'PREPARE' : p === 'work' ? 'LUTA' : p === 'rest' ? 'DESCANSO' : 'FIM';
+    }
+    function showClock() {
+      clockEl.textContent = fmt(remaining);
+      roundInfoEl.textContent = (phase === 'done') ? 'Treino concluído' : 'Round ' + round + ' / ' + cfg.rounds;
+    }
+
+    function startSession() {
+      ensureAudio();
+      round = 1;
+      configScreen.classList.remove('active');
+      runScreen.classList.add('active');
+      paused = false; pauseBtn.textContent = 'Pausar';
+      if (cfg.prep > 0) { setPhase('prep'); remaining = cfg.prep; }
+      else { setPhase('work'); remaining = cfg.work; signalRoundStart(); }
+      showClock();
+      runTimer();
+    }
+    function runTimer() {
+      clearInterval(timer);
+      timer = setInterval(function(){
+        if (paused) return;
+        remaining--;
+        if (remaining > 0 && remaining <= 3) tickWarn();
+        if (remaining <= 0) { nextPhase(); }
+        showClock();
+      }, 1000);
+    }
+    function nextPhase() {
+      if (phase === 'prep') {
+        setPhase('work'); remaining = cfg.work; signalRoundStart();
+      } else if (phase === 'work') {
+        if (round >= cfg.rounds) { finish(); return; }
+        if (cfg.rest > 0) { setPhase('rest'); remaining = cfg.rest; signalRest(); }
+        else { round++; setPhase('work'); remaining = cfg.work; signalRoundStart(); }
+      } else if (phase === 'rest') {
+        round++; setPhase('work'); remaining = cfg.work; signalRoundStart();
+      }
+    }
+    function finish() {
+      clearInterval(timer);
+      setPhase('done'); remaining = 0; showClock();
+      signalEnd();
+    }
+    function stopSession() {
+      clearInterval(timer);
+      runScreen.classList.remove('active');
+      configScreen.classList.add('active');
+      focusFirst();
+    }
+
+    document.getElementById('startBtn').addEventListener('click', startSession);
+    pauseBtn.addEventListener('click', function(){
+      paused = !paused; this.textContent = paused ? 'Retomar' : 'Pausar';
+    });
+    document.getElementById('stopBtn').addEventListener('click', stopSession);
+
+    Array.from(document.querySelectorAll('#config .row')).forEach(function(row){
+      row.addEventListener('click', function(){ adjust(row.getAttribute('data-key'), +1); });
+    });
+
+    function focusFirst() {
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (f.length) f[0].focus();
+    }
+
+    document.addEventListener('keydown', function(e) {
+      ensureAudio();
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (!f.length) return;
+      var idx = f.indexOf(document.activeElement);
+      var active = document.activeElement;
+      var key = active && active.getAttribute ? active.getAttribute('data-key') : null;
+
+      switch (e.key) {
+        case DPAD.UP:
+          idx = idx > 0 ? idx - 1 : f.length - 1; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.DOWN:
+          idx = idx < f.length - 1 ? idx + 1 : 0; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.LEFT:
+          if (key) { adjust(key, -1); e.preventDefault(); }
+          else { idx = idx > 0 ? idx - 1 : f.length - 1; f[idx].focus(); e.preventDefault(); }
+          break;
+        case DPAD.RIGHT:
+          if (key) { adjust(key, +1); e.preventDefault(); }
+          else { idx = idx < f.length - 1 ? idx + 1 : 0; f[idx].focus(); e.preventDefault(); }
+          break;
+        case DPAD.SELECT:
+          if (active.classList.contains('focusable')) { active.click(); e.preventDefault(); }
+          break;
+      }
+    });
+
+    renderConfig();
+    focusFirst();
+  </script>
+</body>
+</html>

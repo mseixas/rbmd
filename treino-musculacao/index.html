@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Treino de musculacao para Meta Ray-Ban Display - monta o treino, timer de descanso entre series com beep e registro.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Treino — Musculação</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 600px; height: 600px; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    #app { width: 600px; height: 600px; position: relative; }
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; }
+    .screen.active { display: flex; }
+
+    h1 { font-size: 30px; color: #00d4ff; margin-top: 22px; }
+    .sub { font-size: 14px; color: #777; margin-top: 6px; text-align: center; max-width: 510px; }
+
+    .focusable { transition: all 150ms ease; border: 2px solid #333; min-height: 76px; outline: none; }
+    .focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    button.focusable, .item.focusable {
+      background: #111; color: #fff; font-size: 20px; font-weight: 600;
+      padding: 0 22px; border-radius: 14px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    }
+
+    /* Builder */
+    #build .list { margin-top: 14px; width: 520px; height: 360px; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+    .item { justify-content: space-between !important; min-height: 64px; }
+    .item .nm { font-weight: 600; }
+    .item .qty { color: #00e0ff; font-size: 18px; font-variant-numeric: tabular-nums; }
+    .item.on { border-color: #2ecc71; }
+    .item.on .qty { color: #2ecc71; }
+    #build .actions { margin-top: 14px; display: flex; gap: 12px; }
+    #build .actions button { min-height: 64px; }
+
+    /* Config (descanso/séries default) */
+    .row { display: flex; align-items: center; justify-content: space-between;
+      background: #0d0d0d; border: 2px solid #333; border-radius: 14px; min-height: 70px; padding: 0 20px; width: 520px; }
+    .row.focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    .row .lbl { font-size: 19px; color: #ddd; } .row .val { font-size: 24px; font-weight: 800; color: #00e0ff; min-width: 90px; text-align: center; }
+    .row .hintk { font-size: 13px; color: #666; }
+
+    /* Sessão */
+    #sess { justify-content: flex-start; padding-top: 20px; }
+    #exName { font-size: 30px; font-weight: 800; color: #00d4ff; margin-top: 4px; text-align: center; }
+    #setInfo { font-size: 22px; color: #aaa; margin-top: 6px; }
+    #restBig { font-size: 150px; font-weight: 800; line-height: 1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    #restBig.resting { color: #ffb020; } #restBig.idle { color: #2ecc71; }
+    #restLabel { font-size: 18px; color: #888; letter-spacing: 2px; height: 22px; }
+    #sessControls { margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 560px; }
+    #sessControls button.focusable { min-height: 60px; font-size: 18px; padding: 0 20px; }
+
+    /* Resumo */
+    #done h1 { margin-top: 40px; }
+    #doneList { margin-top: 20px; width: 480px; }
+    .dRow { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #222; font-size: 19px; }
+    .dRow .v { color: #00e0ff; font-weight: 700; }
+
+    #flash { position: absolute; inset: 0; background: #2ecc71; opacity: 0; z-index: 50; pointer-events: none; transition: opacity 90ms; }
+    #flash.show { opacity: 0.8; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="flash"></div>
+
+    <!-- BUILDER -->
+    <div id="build" class="screen active">
+      <h1>Montar Treino</h1>
+      <div class="sub">Enter marca/desmarca · ◀ ▶ ajusta séries · role ▲ ▼ · vá em "Descanso" e depois "Começar".</div>
+      <div class="list" id="exList"></div>
+      <div class="actions">
+        <div class="row focusable" data-key="rest" style="width:300px">
+          <span class="lbl">Descanso padrão</span>
+          <div class="ctl" style="display:flex;gap:12px;align-items:center"><span class="hintk">◀ ▶</span><span class="val" id="v-rest">1:30</span></div>
+        </div>
+        <button id="startBtn" class="focusable">▶ Começar</button>
+      </div>
+    </div>
+
+    <!-- SESSÃO -->
+    <div id="sess" class="screen">
+      <div id="setInfo">Exercício 1 / 4</div>
+      <div id="exName">Supino</div>
+      <div id="restLabel"></div>
+      <div id="restBig" class="idle">—</div>
+      <div id="sessControls">
+        <button id="doneSetBtn" class="focusable">✓ Série feita</button>
+        <button id="skipRestBtn" class="focusable">Pular descanso</button>
+        <button id="nextExBtn" class="focusable">Próx. exercício ▸</button>
+        <button id="finishBtn" class="focusable">Finalizar</button>
+      </div>
+    </div>
+
+    <!-- RESUMO -->
+    <div id="done" class="screen">
+      <h1>Treino concluído</h1>
+      <div id="doneList"></div>
+      <button id="backBtn" class="focusable" style="margin-top:24px">Voltar ao início</button>
+    </div>
+  </div>
+
+  <script>
+    var DPAD = { UP:'ArrowUp', DOWN:'ArrowDown', LEFT:'ArrowLeft', RIGHT:'ArrowRight', SELECT:'Enter' };
+
+    /* =====================================================================
+       EXERCÍCIOS — edite à vontade. Cada um vira uma opção no builder.
+    ===================================================================== */
+    var EXERCISES = [
+      "Supino reto","Supino inclinado","Crucifixo","Desenvolvimento","Elevação lateral",
+      "Puxada frente","Remada curvada","Rosca direta","Tríceps corda","Agachamento",
+      "Leg press","Cadeira extensora","Mesa flexora","Panturrilha","Abdominal","Levantamento terra"
+    ];
+    /* ===================================================================== */
+
+    var STORAGE_KEY = 'mrbd_musc_hist';
+    var cfg = { rest: 90 };
+    // estado do builder: {name, sets, selected}
+    var plan = EXERCISES.map(function(n){ return { name:n, sets:3, selected:false }; });
+
+    // ---- Beep + flash ----
+    var audioCtx=null;
+    function ensureAudio(){ if(!audioCtx){ try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;} } if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume(); }
+    function beep(freq,durMs,when){ if(!audioCtx)return; try{ var t=audioCtx.currentTime+(when||0); var o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type='square'; o.frequency.value=freq; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.3,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+durMs/1000);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+durMs/1000+0.02);}catch(e){} }
+    var flashEl=document.getElementById('flash');
+    function flash(c){ flashEl.style.background=c||'#2ecc71'; flashEl.classList.add('show'); setTimeout(function(){flashEl.classList.remove('show');},300); }
+    function sigRestDone(){ flash('#2ecc71'); beep(880,150); beep(1320,200,0.18); }
+    function tickWarn(){ beep(700,90); }
+
+    // ---- Builder render ----
+    var exListEl=document.getElementById('exList');
+    function fmt(s){ var m=Math.floor(s/60),r=s%60; return m+':'+String(r).padStart(2,'0'); }
+    function renderBuilder(){
+      exListEl.innerHTML='';
+      // mostra os itens; lista rola via foco (scrollIntoView)
+      plan.forEach(function(it, i){
+        var div=document.createElement('div');
+        div.className='item focusable'+(it.selected?' on':'');
+        div.setAttribute('data-i', i);
+        div.innerHTML='<span class="nm">'+(it.selected?'✓ ':'')+it.name+'</span><span class="qty">'+it.sets+' x</span>';
+        div.addEventListener('click', function(){ it.selected=!it.selected; renderBuilder(); refocus(i); });
+        exListEl.appendChild(div);
+      });
+      document.getElementById('v-rest').textContent=fmt(cfg.rest);
+    }
+    function refocus(i){
+      var el=exListEl.querySelector('[data-i="'+i+'"]');
+      if(el){ el.focus(); el.scrollIntoView({block:'nearest'}); }
+    }
+
+    // ---- Sessão ----
+    var buildScreen=document.getElementById('build'), sessScreen=document.getElementById('sess'), doneScreen=document.getElementById('done');
+    var exNameEl=document.getElementById('exName'), setInfoEl=document.getElementById('setInfo'),
+        restBig=document.getElementById('restBig'), restLabel=document.getElementById('restLabel');
+    var session=[]; // [{name, setsTotal, setsDone}]
+    var curEx=0, restTimer=null, restRemaining=0, resting=false;
+
+    function startSession(){
+      ensureAudio();
+      var chosen=plan.filter(function(it){return it.selected;});
+      if(!chosen.length){ // nada marcado: marca o primeiro pra não travar
+        plan[0].selected=true; chosen=[plan[0]]; renderBuilder();
+      }
+      session=chosen.map(function(it){ return { name:it.name, setsTotal:it.sets, setsDone:0 }; });
+      curEx=0; resting=false;
+      buildScreen.classList.remove('active'); sessScreen.classList.add('active');
+      renderSession(); focusFirst();
+    }
+    function renderSession(){
+      var ex=session[curEx];
+      setInfoEl.textContent='Exercício '+(curEx+1)+' / '+session.length;
+      exNameEl.textContent=ex.name;
+      if(resting){
+        restBig.className='resting'; restLabel.textContent='DESCANSO';
+        restBig.textContent=fmt(restRemaining);
+      } else {
+        restBig.className='idle'; restLabel.textContent='SÉRIES';
+        restBig.textContent=ex.setsDone+' / '+ex.setsTotal;
+      }
+    }
+    function doneSet(){
+      var ex=session[curEx];
+      if(ex.setsDone < ex.setsTotal) ex.setsDone++;
+      startRest();
+    }
+    function startRest(){
+      resting=true; restRemaining=cfg.rest; renderSession();
+      clearInterval(restTimer);
+      restTimer=setInterval(function(){
+        restRemaining--;
+        if(restRemaining>0 && restRemaining<=3) tickWarn();
+        if(restRemaining<=0){ clearInterval(restTimer); resting=false; sigRestDone(); }
+        renderSession();
+      },1000);
+    }
+    function skipRest(){ clearInterval(restTimer); resting=false; renderSession(); }
+    function nextEx(){
+      clearInterval(restTimer); resting=false;
+      if(curEx < session.length-1){ curEx++; renderSession(); }
+      else finish();
+    }
+    function finish(){
+      clearInterval(restTimer);
+      sessScreen.classList.remove('active'); doneScreen.classList.add('active');
+      var list=document.getElementById('doneList'); list.innerHTML='';
+      session.forEach(function(ex){
+        var r=document.createElement('div'); r.className='dRow';
+        r.innerHTML='<span>'+ex.name+'</span><span class="v">'+ex.setsDone+'/'+ex.setsTotal+' séries</span>';
+        list.appendChild(r);
+      });
+      try {
+        var hist=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+        hist.unshift({ date:new Date().toLocaleDateString('pt-BR'), exercicios:session.length,
+          series: session.reduce(function(a,e){return a+e.setsDone;},0) });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(hist.slice(0,50)));
+      } catch(e){}
+      focusFirst();
+    }
+    function resetToBuild(){ doneScreen.classList.remove('active'); buildScreen.classList.add('active'); focusFirst(); }
+
+    document.getElementById('startBtn').addEventListener('click', startSession);
+    document.getElementById('doneSetBtn').addEventListener('click', doneSet);
+    document.getElementById('skipRestBtn').addEventListener('click', skipRest);
+    document.getElementById('nextExBtn').addEventListener('click', nextEx);
+    document.getElementById('finishBtn').addEventListener('click', finish);
+    document.getElementById('backBtn').addEventListener('click', resetToBuild);
+    document.querySelector('.row[data-key="rest"]').addEventListener('click', function(){ cfg.rest=Math.min(300,cfg.rest+15); renderBuilder(); });
+
+    function focusFirst(){
+      var f=Array.from(document.querySelectorAll('.screen.active .focusable')).filter(function(el){return el.offsetParent!==null;});
+      if(f.length) f[0].focus();
+    }
+    document.addEventListener('keydown', function(e){
+      ensureAudio();
+      var f=Array.from(document.querySelectorAll('.screen.active .focusable')).filter(function(el){return el.offsetParent!==null;});
+      if(!f.length) return;
+      var idx=f.indexOf(document.activeElement), active=document.activeElement;
+      var isItem = active && active.classList.contains('item');
+      var isRestRow = active && active.getAttribute && active.getAttribute('data-key')==='rest';
+
+      switch(e.key){
+        case DPAD.UP: idx=idx>0?idx-1:f.length-1; f[idx].focus(); f[idx].scrollIntoView({block:'nearest'}); e.preventDefault(); break;
+        case DPAD.DOWN: idx=idx<f.length-1?idx+1:0; f[idx].focus(); f[idx].scrollIntoView({block:'nearest'}); e.preventDefault(); break;
+        case DPAD.LEFT:
+          if(isItem){ var i=+active.getAttribute('data-i'); plan[i].sets=Math.max(1,plan[i].sets-1); renderBuilder(); refocus(i); e.preventDefault(); }
+          else if(isRestRow){ cfg.rest=Math.max(15,cfg.rest-15); renderBuilder(); active.focus(); e.preventDefault(); }
+          else { idx=idx>0?idx-1:f.length-1; f[idx].focus(); e.preventDefault(); } break;
+        case DPAD.RIGHT:
+          if(isItem){ var j=+active.getAttribute('data-i'); plan[j].sets=Math.min(10,plan[j].sets+1); renderBuilder(); refocus(j); e.preventDefault(); }
+          else if(isRestRow){ cfg.rest=Math.min(300,cfg.rest+15); renderBuilder(); active.focus(); e.preventDefault(); }
+          else { idx=idx<f.length-1?idx+1:0; f[idx].focus(); e.preventDefault(); } break;
+        case DPAD.SELECT:
+          if(active.classList.contains('focusable')){ active.click(); e.preventDefault(); } break;
+      }
+    });
+
+    renderBuilder();
+    focusFirst();
+  </script>
+</body>
+</html>
