@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Contador de repeticoes por movimento para Meta Ray-Ban Display - testa o acelerometro e o armazenamento local.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Contador de Movimento</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 600px; height: 600px; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    #app { width: 600px; height: 600px; position: relative; }
+
+    .screen { position: absolute; inset: 0; display: none;
+      flex-direction: column; align-items: center; }
+    .screen.active { display: flex; }
+
+    h1 { font-size: 34px; color: #00d4ff; margin-top: 30px; text-align: center; }
+    .sub { font-size: 18px; color: #aaa; text-align: center; max-width: 470px; margin-top: 12px; }
+
+    .focusable { transition: all 150ms ease; border: 2px solid #333;
+      min-height: 88px; outline: none; }
+    .focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    button.focusable {
+      background: #111; color: #fff; font-size: 22px; font-weight: 600;
+      padding: 0 32px; border-radius: 16px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 340px;
+    }
+
+    /* Home */
+    #home .menu { margin-top: 30px; display: flex; flex-direction: column; gap: 16px; }
+    #home .exLabel { font-size: 20px; color: #fff; }
+    #exName { color: #00e0ff; }
+
+    /* Contador */
+    #count #exTitle { font-size: 26px; color: #00d4ff; margin-top: 28px; letter-spacing: 1px; }
+    #big { font-size: 200px; font-weight: 800; line-height: 1; margin-top: 8px;
+      color: #fff; font-variant-numeric: tabular-nums;
+      transition: transform 90ms ease, color 90ms; }
+    #big.pulse { transform: scale(1.12); color: #2ecc71; }
+    #gforce { margin-top: 4px; font-size: 18px; color: #777; height: 22px; }
+    #countControls { margin-top: 26px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    #countControls button.focusable { min-width: 0; min-height: 64px; font-size: 19px; padding: 0 24px; }
+
+    /* Histórico */
+    #history #hTitle { font-size: 26px; color: #00d4ff; margin-top: 30px; }
+    #hList { margin-top: 22px; width: 480px; max-height: 360px; overflow: hidden; }
+    .hRow { display: flex; justify-content: space-between; padding: 12px 16px;
+      border-bottom: 1px solid #222; font-size: 20px; }
+    .hRow .d { color: #aaa; } .hRow .v { color: #fff; font-weight: 700; }
+    #hEmpty { color: #666; font-size: 20px; margin-top: 30px; }
+    #history .back { margin-top: 24px; }
+
+    #err { color: #ff5252; font-size: 17px; margin-top: 14px; text-align: center; max-width: 480px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- HOME -->
+    <div id="home" class="screen active">
+      <h1>Contador de Movimento</h1>
+      <div class="sub">Conta repetições detectando picos de aceleração. Mexa a cabeça/corpo no ritmo do exercício.</div>
+      <div class="menu">
+        <button id="exBtn" class="focusable"><span class="exLabel">Exercício:&nbsp;<span id="exName">Polichinelo</span></span></button>
+        <button id="startBtn" class="focusable">▶  Começar</button>
+        <button id="histBtn" class="focusable">📊  Histórico</button>
+      </div>
+      <div id="err"></div>
+    </div>
+
+    <!-- CONTADOR -->
+    <div id="count" class="screen">
+      <div id="exTitle">POLICHINELO</div>
+      <div id="big">0</div>
+      <div id="gforce"></div>
+      <div id="countControls">
+        <button id="pauseBtn" class="focusable">Pausar</button>
+        <button id="resetCntBtn" class="focusable">Zerar</button>
+        <button id="saveBtn" class="focusable">Salvar &amp; sair</button>
+      </div>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div id="history" class="screen">
+      <div id="hTitle">Histórico</div>
+      <div id="hList"></div>
+      <div id="hEmpty" class="hidden">Nada salvo ainda.</div>
+      <button id="hBackBtn" class="focusable back">Voltar</button>
+    </div>
+  </div>
+
+  <script>
+    var DPAD = { UP:'ArrowUp', DOWN:'ArrowDown', LEFT:'ArrowLeft', RIGHT:'ArrowRight', SELECT:'Enter' };
+
+    var EXERCISES = ['Polichinelo', 'Agachamento', 'Passos', 'Aceno'];
+    // limiar de G acima da base e tempo mínimo entre reps (ms)
+    var CONFIG = {
+      'Polichinelo': { thr: 0.45, cooldown: 350 },
+      'Agachamento': { thr: 0.35, cooldown: 600 },
+      'Passos':      { thr: 0.30, cooldown: 300 },
+      'Aceno':       { thr: 0.50, cooldown: 250 }
+    };
+    var exIdx = 0;
+    var count = 0;
+    var running = false;
+    var lastRepTime = 0;
+    var armed = true;            // pronto pra contar o próximo pico
+    var STORAGE_KEY = 'mrbd_repcount';
+
+    var homeScreen = document.getElementById('home');
+    var countScreen = document.getElementById('count');
+    var histScreen = document.getElementById('history');
+    var bigEl = document.getElementById('big');
+    var gforceEl = document.getElementById('gforce');
+    var exNameEl = document.getElementById('exName');
+    var exTitleEl = document.getElementById('exTitle');
+    var errEl = document.getElementById('err');
+
+    function currentEx(){ return EXERCISES[exIdx]; }
+
+    function handleMotion(e) {
+      if (!running) return;
+      var a = e.accelerationIncludingGravity;
+      if (!a || a.x === null) return;
+      var g = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z) / 9.81;
+      // base ~1G (gravidade). desvio = quanto passou de parado
+      var dev = Math.abs(g - 1);
+      gforceEl.textContent = g.toFixed(2) + ' G';
+
+      var cfg = CONFIG[currentEx()];
+      var now = Date.now();
+      if (armed && dev > cfg.thr && (now - lastRepTime) > cfg.cooldown) {
+        count++; lastRepTime = now; armed = false;
+        bigEl.textContent = count;
+        bigEl.classList.add('pulse');
+        setTimeout(function(){ bigEl.classList.remove('pulse'); }, 120);
+      }
+      // re-arma quando volta perto do repouso
+      if (!armed && dev < cfg.thr * 0.5) armed = true;
+    }
+
+    function startMotion() {
+      function attach(){ window.addEventListener('devicemotion', handleMotion); running = true; }
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().then(function(s){
+          if (s === 'granted') attach();
+          else errEl.textContent = 'Permissão de movimento negada.';
+        }).catch(function(){ errEl.textContent = 'Não foi possível pedir permissão.'; });
+      } else {
+        attach();
+      }
+    }
+
+    // --- Telas ---
+    function show(screen) {
+      [homeScreen, countScreen, histScreen].forEach(function(s){ s.classList.remove('active'); });
+      screen.classList.add('active');
+      focusFirst();
+    }
+    function startCounting() {
+      count = 0; armed = true; lastRepTime = 0;
+      bigEl.textContent = '0';
+      exTitleEl.textContent = currentEx().toUpperCase();
+      show(countScreen);
+      startMotion();
+    }
+    function stopCounting() {
+      running = false;
+      window.removeEventListener('devicemotion', handleMotion);
+    }
+
+    function todayKey() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e){ return []; }
+    }
+    function saveSession() {
+      var hist = loadHistory();
+      hist.unshift({ date: todayKey(), time: new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
+                     ex: currentEx(), reps: count });
+      hist = hist.slice(0, 50);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(hist)); } catch(e){}
+    }
+    function renderHistory() {
+      var hist = loadHistory();
+      var list = document.getElementById('hList');
+      var empty = document.getElementById('hEmpty');
+      list.innerHTML = '';
+      if (!hist.length) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      hist.slice(0, 10).forEach(function(h){
+        var row = document.createElement('div');
+        row.className = 'hRow';
+        row.innerHTML = '<span class="d">' + h.date + ' ' + (h.time||'') + ' · ' + h.ex + '</span><span class="v">' + h.reps + '</span>';
+        list.appendChild(row);
+      });
+    }
+
+    // --- Botões ---
+    document.getElementById('exBtn').addEventListener('click', function(){
+      exIdx = (exIdx + 1) % EXERCISES.length;
+      exNameEl.textContent = currentEx();
+    });
+    document.getElementById('startBtn').addEventListener('click', startCounting);
+    document.getElementById('histBtn').addEventListener('click', function(){ renderHistory(); show(histScreen); });
+
+    document.getElementById('pauseBtn').addEventListener('click', function(){
+      running = !running;
+      this.textContent = running ? 'Pausar' : 'Retomar';
+    });
+    document.getElementById('resetCntBtn').addEventListener('click', function(){
+      count = 0; bigEl.textContent = '0';
+    });
+    document.getElementById('saveBtn').addEventListener('click', function(){
+      if (count > 0) saveSession();
+      stopCounting();
+      show(homeScreen);
+    });
+    document.getElementById('hBackBtn').addEventListener('click', function(){ show(homeScreen); });
+
+    function focusFirst() {
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (f.length) f[0].focus();
+    }
+    document.addEventListener('keydown', function(e) {
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (!f.length) return;
+      var idx = f.indexOf(document.activeElement);
+      switch (e.key) {
+        case DPAD.UP: case DPAD.LEFT:
+          idx = idx > 0 ? idx - 1 : f.length - 1; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.DOWN: case DPAD.RIGHT:
+          idx = idx < f.length - 1 ? idx + 1 : 0; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.SELECT:
+          if (document.activeElement.classList.contains('focusable')) {
+            document.activeElement.click(); e.preventDefault();
+          }
+          break;
+      }
+    });
+
+    focusFirst();
+  </script>
+</body>
+</html>

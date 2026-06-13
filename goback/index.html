@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Bussola com waypoint para Meta Ray-Ban Display - marca um ponto e aponta de volta. Testa GPS e orientacao.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Volta pra Casa</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 600px; height: 600px; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    #app { width: 600px; height: 600px; position: relative; }
+
+    .screen { position: absolute; inset: 0; display: none;
+      flex-direction: column; align-items: center; }
+    .screen.active { display: flex; }
+
+    h1 { font-size: 36px; color: #00d4ff; margin-top: 36px; }
+    .sub { font-size: 19px; color: #aaa; text-align: center; max-width: 470px; margin-top: 14px; }
+
+    .focusable { transition: all 150ms ease; border: 2px solid #333;
+      min-height: 88px; outline: none; }
+    .focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+
+    button.focusable {
+      background: #111; color: #fff; font-size: 23px; font-weight: 600;
+      padding: 0 36px; border-radius: 16px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 360px;
+    }
+
+    /* Home: escolha de preset */
+    #home .presets { margin-top: 40px; display: flex; flex-direction: column; gap: 18px; }
+    #home .hint { margin-top: 30px; font-size: 17px; color: #777; }
+
+    /* Navegação ativa */
+    #nav { justify-content: flex-start; }
+    #navTitle { font-size: 24px; color: #00d4ff; margin-top: 26px; letter-spacing: 1px; }
+    #compass {
+      position: relative; width: 340px; height: 340px; margin-top: 22px;
+      border-radius: 50%; border: 3px solid #2a2a2a;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #arrow {
+      width: 0; height: 0; border-left: 46px solid transparent;
+      border-right: 46px solid transparent; border-bottom: 150px solid #00e0ff;
+      filter: drop-shadow(0 0 18px rgba(0,224,255,0.7));
+      transform-origin: 50% 70%;
+      transition: transform 120ms linear; will-change: transform;
+    }
+    #dist { margin-top: 26px; font-size: 56px; font-weight: 800;
+      color: #fff; font-variant-numeric: tabular-nums; }
+    #distLbl { font-size: 18px; color: #888; letter-spacing: 2px; }
+    #meta { margin-top: 10px; font-size: 16px; color: #666; height: 20px; }
+    #navControls { margin-top: 22px; display: flex; gap: 16px; }
+    #navControls button.focusable { min-width: 0; min-height: 64px; font-size: 19px; padding: 0 26px; }
+
+    #err { color: #ff5252; font-size: 18px; margin-top: 16px; text-align: center; max-width: 480px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- HOME -->
+    <div id="home" class="screen active">
+      <h1>Volta pra Casa</h1>
+      <div class="sub">Marque sua posição atual. Depois o app aponta de volta com uma seta e mostra a distância em tempo real.</div>
+      <div class="presets">
+        <button class="focusable" data-label="Carro">🚗  Marcar: Carro</button>
+        <button class="focusable" data-label="Casa">🏠  Marcar: Casa</button>
+        <button class="focusable" data-label="Ponto">📍  Marcar: Ponto</button>
+      </div>
+      <div class="hint" id="homeHint"></div>
+      <div id="err"></div>
+    </div>
+
+    <!-- NAV -->
+    <div id="nav" class="screen">
+      <div id="navTitle">→ —</div>
+      <div id="compass"><div id="arrow"></div></div>
+      <div id="distLbl">DISTÂNCIA</div>
+      <div id="dist">—</div>
+      <div id="meta"></div>
+      <div id="navControls">
+        <button id="recenterBtn" class="focusable">Atualizar</button>
+        <button id="backBtn" class="focusable">Trocar ponto</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var DPAD = { UP:'ArrowUp', DOWN:'ArrowDown', LEFT:'ArrowLeft', RIGHT:'ArrowRight', SELECT:'Enter' };
+
+    var target = null;        // {lat, lon, label}
+    var heading = 0;          // bússola atual
+    var current = null;       // posição atual
+    var watchId = null;
+    var STORAGE_KEY = 'mrbd_waypoint';
+
+    var homeScreen = document.getElementById('home');
+    var navScreen  = document.getElementById('nav');
+    var arrowEl    = document.getElementById('arrow');
+    var distEl     = document.getElementById('dist');
+    var metaEl     = document.getElementById('meta');
+    var navTitle   = document.getElementById('navTitle');
+    var errEl      = document.getElementById('err');
+    var homeHint   = document.getElementById('homeHint');
+
+    // Mostra waypoint salvo, se houver
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved) homeHint.textContent = 'Último ponto salvo: ' + saved.label;
+    } catch (e) {}
+
+    function toRad(d){ return d * Math.PI / 180; }
+    function toDeg(r){ return r * 180 / Math.PI; }
+
+    // Distância em metros (haversine)
+    function distance(a, b) {
+      var R = 6371000;
+      var dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+      var s = Math.sin(dLat/2)*Math.sin(dLat/2) +
+              Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLon/2)*Math.sin(dLon/2);
+      return 2 * R * Math.asin(Math.sqrt(s));
+    }
+    // Rumo (bearing) de A para B, em graus a partir do norte
+    function bearing(a, b) {
+      var dLon = toRad(b.lon - a.lon);
+      var y = Math.sin(dLon) * Math.cos(toRad(b.lat));
+      var x = Math.cos(toRad(a.lat))*Math.sin(toRad(b.lat)) -
+              Math.sin(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.cos(dLon);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    function fmtDist(m) {
+      if (m == null) return '—';
+      if (m < 1000) return Math.round(m) + ' m';
+      return (m/1000).toFixed(2).replace('.', ',') + ' km';
+    }
+
+    function updateArrow() {
+      if (!target || !current) return;
+      var d = distance(current, target);
+      distEl.textContent = fmtDist(d);
+      var brg = bearing(current, target);
+      // direção relativa: rumo ao alvo menos para onde estou olhando
+      var rel = (brg - heading + 360) % 360;
+      arrowEl.style.transform = 'rotate(' + rel.toFixed(1) + 'deg)';
+      metaEl.textContent = 'precisão ~' + (current.acc ? Math.round(current.acc) + ' m' : '—');
+    }
+
+    function handleOrientation(e) {
+      if (e.alpha === null) return;
+      // alpha: 0 = norte. Convertendo para heading de bússola.
+      heading = (360 - e.alpha) % 360;
+      updateArrow();
+    }
+
+    function onPos(pos) {
+      current = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      updateArrow();
+    }
+    function onPosErr(err) {
+      var msg = err.code === 1 ? 'Permissão de localização negada.'
+              : err.code === 2 ? 'Localização indisponível (celular offline?).'
+              : 'Tempo esgotado ao buscar localização.';
+      errEl.textContent = msg;
+      metaEl.textContent = msg;
+    }
+
+    function startSensors() {
+      // orientação
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(function(s){
+          if (s === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+        }).catch(function(){});
+      } else {
+        window.addEventListener('deviceorientation', handleOrientation);
+      }
+      // localização contínua
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = navigator.geolocation.watchPosition(onPos, onPosErr,
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 });
+    }
+
+    function markHere(label) {
+      errEl.textContent = '';
+      homeHint.textContent = 'Buscando sua posição...';
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        target = { lat: pos.coords.latitude, lon: pos.coords.longitude, label: label };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(target)); } catch(e){}
+        current = { lat: target.lat, lon: target.lon, acc: pos.coords.accuracy };
+        navTitle.textContent = '→ ' + label;
+        goNav();
+        startSensors();
+      }, onPosErr, { enableHighAccuracy: true, timeout: 15000 });
+    }
+
+    function goNav() {
+      homeScreen.classList.remove('active');
+      navScreen.classList.add('active');
+      document.getElementById('recenterBtn').focus();
+    }
+    function goHome() {
+      navScreen.classList.remove('active');
+      homeScreen.classList.add('active');
+      if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+      window.removeEventListener('deviceorientation', handleOrientation);
+      focusFirst();
+    }
+
+    // Botões
+    Array.from(document.querySelectorAll('#home .focusable')).forEach(function(btn){
+      btn.addEventListener('click', function(){ markHere(btn.getAttribute('data-label')); });
+    });
+    document.getElementById('recenterBtn').addEventListener('click', function(){
+      navigator.geolocation.getCurrentPosition(onPos, onPosErr, { enableHighAccuracy: true, timeout: 15000 });
+    });
+    document.getElementById('backBtn').addEventListener('click', goHome);
+
+    function focusFirst() {
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (f.length) f[0].focus();
+    }
+
+    document.addEventListener('keydown', function(e) {
+      var f = Array.from(document.querySelectorAll('.screen.active .focusable'))
+        .filter(function(el){ return el.offsetParent !== null; });
+      if (!f.length) return;
+      var idx = f.indexOf(document.activeElement);
+      switch (e.key) {
+        case DPAD.UP: case DPAD.LEFT:
+          idx = idx > 0 ? idx - 1 : f.length - 1; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.DOWN: case DPAD.RIGHT:
+          idx = idx < f.length - 1 ? idx + 1 : 0; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.SELECT:
+          if (document.activeElement.classList.contains('focusable')) {
+            document.activeElement.click(); e.preventDefault();
+          }
+          break;
+      }
+    });
+
+    focusFirst();
+  </script>
+</body>
+</html>
