@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Shadowbox para Meta Ray-Ban Display - modos random/sequencia, niveis 1.0/2.0/3.0, rounds com beep e flash.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <title>Shadowbox</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 600px; height: 600px; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none;
+    }
+    #app { width: 600px; height: 600px; position: relative; }
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; }
+    .screen.active { display: flex; }
+
+    h1 { font-size: 30px; color: #00d4ff; margin-top: 22px; }
+    h2 { font-size: 22px; color: #fff; margin-top: 18px; }
+    .sub { font-size: 14px; color: #777; margin-top: 6px; text-align: center; max-width: 510px; }
+
+    .focusable { transition: all 150ms ease; border: 2px solid #333; min-height: 84px; outline: none; }
+    .focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    button.focusable {
+      background: #111; color: #fff; font-size: 21px; font-weight: 600;
+      padding: 0 28px; border-radius: 16px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .pickList { margin-top: 22px; display: flex; flex-direction: column; gap: 14px; width: 460px; }
+    .pickList button.focusable { min-height: 88px; flex-direction: column; gap: 4px; }
+    .pickList .big { font-size: 26px; } .pickList .small { font-size: 14px; color: #999; font-weight: 400; }
+
+    /* Config */
+    #config .rows { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; width: 510px; }
+    .row { display: flex; align-items: center; justify-content: space-between;
+      background: #0d0d0d; border: 2px solid #333; border-radius: 16px; min-height: 74px; padding: 0 20px; }
+    .row.focusable:focus { border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.45); }
+    .row .lbl { font-size: 20px; color: #ddd; }
+    .row .ctl { display: flex; align-items: center; gap: 14px; }
+    .row .val { font-size: 26px; font-weight: 800; color: #00e0ff; min-width: 120px; text-align: center; font-variant-numeric: tabular-nums; }
+    .row .hintk { font-size: 13px; color: #666; }
+    #startBtn { margin-top: 12px; min-width: 320px; }
+    .crumb { font-size: 15px; color: #00d4ff; margin-top: 10px; }
+
+    /* Run */
+    #run { justify-content: flex-start; padding-top: 16px; }
+    #runHead { display: flex; justify-content: space-between; width: 540px; font-size: 19px; color: #aaa; }
+    #runHead .phase { font-weight: 800; letter-spacing: 1px; }
+    #runHead .phase.work { color: #2ecc71; } #runHead .phase.rest { color: #ffb020; }
+    #clock { font-size: 48px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+    #comboBox {
+      margin-top: 14px; width: 552px; min-height: 300px; border-radius: 22px;
+      background: linear-gradient(160deg, #0a0a0a, #141414); border: 2px solid #222;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px; gap: 14px;
+    }
+    /* Números em DESTAQUE (memorização) */
+    #comboNums { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+    .numChip {
+      font-weight: 900; color: #00e0ff; line-height: 1;
+      background: rgba(0,224,255,0.10); border: 3px solid #00e0ff; border-radius: 18px;
+      padding: 10px 22px; text-shadow: 0 0 18px rgba(0,224,255,0.5);
+    }
+    .numPlus { color: #555; font-weight: 700; }
+    /* tamanhos por quantidade de combos no encadeamento */
+    .n1 .numChip { font-size: 150px; padding: 6px 40px; }
+    .n2 .numChip { font-size: 104px; }
+    .n3 .numChip { font-size: 78px; }
+    .n1 .numPlus { font-size: 60px; } .n2 .numPlus { font-size: 52px; } .n3 .numPlus { font-size: 40px; }
+
+    /* Texto dos golpes (menor, escalado pela quantidade) */
+    #comboText { color: #fff; text-align: center; line-height: 1.15; font-weight: 700; max-width: 520px; }
+    #comboText.rest { color: #ffb020; }
+    .t1 { font-size: 34px; } .t2 { font-size: 24px; } .t3 { font-size: 20px; }
+    .seqLine { display: block; margin: 2px 0; }
+    .seqLine .sn { color: #00e0ff; font-weight: 900; margin-right: 8px; }
+
+    #runControls { margin-top: 16px; display: flex; gap: 14px; }
+    #runControls button.focusable { min-height: 58px; font-size: 18px; padding: 0 20px; }
+
+    #flash { position: absolute; inset: 0; background: #2ecc71; opacity: 0; z-index: 50; pointer-events: none; transition: opacity 90ms; }
+    #flash.show { opacity: 0.8; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="flash"></div>
+
+    <!-- MODO -->
+    <div id="modeScreen" class="screen active">
+      <h1>Shadowbox</h1>
+      <div class="sub">Escolha o modo de chamada dos combos. ▲ ▼ navega · Enter seleciona.</div>
+      <div class="pickList">
+        <button class="focusable" data-mode="random"><span class="big">🎲 Random</span><span class="small">Sorteia os combos em ordem aleatória</span></button>
+        <button class="focusable" data-mode="seq"><span class="big">🔢 Sequência</span><span class="small">Combos em ordem, do primeiro ao último</span></button>
+      </div>
+    </div>
+
+    <!-- NÍVEL -->
+    <div id="levelScreen" class="screen">
+      <h1>Nível</h1>
+      <div class="crumb" id="modeCrumb">Modo: —</div>
+      <div class="pickList">
+        <button class="focusable" data-level="1"><span class="big">Combos 1.0</span><span class="small">18 combos individuais (1 a 18)</span></button>
+        <button class="focusable" data-level="2"><span class="big">Combos 2.0</span><span class="small">9 encadeamentos de 2 combos</span></button>
+        <button class="focusable" data-level="3"><span class="big">Combos 3.0</span><span class="small">9 encadeamentos de 3 combos</span></button>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="config" class="screen">
+      <h1>Round Timer</h1>
+      <div class="crumb" id="cfgCrumb">Random · Combos 1.0</div>
+      <div class="rows">
+        <div class="row focusable" data-key="rounds"><span class="lbl">Rounds</span><div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-rounds">3</span></div></div>
+        <div class="row focusable" data-key="work"><span class="lbl">Execução (round)</span><div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-work">2:00</span></div></div>
+        <div class="row focusable" data-key="rest"><span class="lbl">Descanso</span><div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-rest">0:45</span></div></div>
+        <div class="row focusable" data-key="interval"><span class="lbl">Intervalo entre combos</span><div class="ctl"><span class="hintk">◀ ▶</span><span class="val" id="v-interval">5 s</span></div></div>
+      </div>
+      <button id="startBtn" class="focusable">▶  Iniciar</button>
+    </div>
+
+    <!-- RUN -->
+    <div id="run" class="screen">
+      <div id="runHead">
+        <span class="phase work" id="phaseLbl">LUTA</span>
+        <span id="roundLbl">Round 1 / 3</span>
+      </div>
+      <div id="clock">2:00</div>
+      <div id="comboBox">
+        <div id="comboNums" class="n1"></div>
+        <div id="comboText" class="t1"></div>
+      </div>
+      <div id="runControls">
+        <button id="pauseBtn" class="focusable">Pausar</button>
+        <button id="nextBtn" class="focusable">Próximo</button>
+        <button id="stopBtn" class="focusable">Parar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var DPAD = { UP:'ArrowUp', DOWN:'ArrowDown', LEFT:'ArrowLeft', RIGHT:'ArrowRight', SELECT:'Enter' };
+
+    /* =====================================================================
+       COMBOS BASE (1 a 18) — edite à vontade.
+    ===================================================================== */
+    var COMBOS = [
+      "Jab",
+      "Jab + Cross",
+      "Cross + Hook + Cross",
+      "Jab + Cross + Hook + Cross",
+      "Upper + Hook + Cross + Upper",
+      "Upper + Cross + Hook + Upper",
+      "Duck L + Hook + Cross + Hook",
+      "Duck R + Cross + Hook + Cross",
+      "Esq L + Jab + Cross",
+      "Esq R + Cross + Jab",
+      "Block L + Duck + Hook + Hook + Cross + Hook",
+      "Block R + Duck + Hook + Upper + Hook + Cross",
+      "Block Kick L + Hook + Cross + Kick R",
+      "Block Kick R + Cross + Hook + Switch + Kick L",
+      "5 Elbows + 3 Knees",
+      "5 Elbows + 3 Knees",
+      "Front 1 + Round 2 + Round Side Full",
+      "Front 2 + Switch + Round 2 + Round Side"
+    ];
+
+    /* Encadeamentos 2.0 (pares) e 3.0 (trios) — números 1-based.
+       Edite/adicione livremente. */
+    var CHAINS_2 = [
+      [2,14],[3,13],[4,7],[5,9],[6,10],[7,15],[8,16],[9,12],[10,11]
+    ];
+    var CHAINS_3 = [
+      [2,14,12],[3,13,11],[4,7,8],[5,9,17],[6,10,18],[7,15,17],[8,16,14],[9,12,17],[10,11,18]
+    ];
+    /* ===================================================================== */
+
+    // Monta a lista de "itens" conforme o nível: cada item = array de números
+    function buildPool(level) {
+      if (level === 1) return COMBOS.map(function(_, i){ return [i+1]; });
+      if (level === 2) return CHAINS_2.map(function(a){ return a.slice(); });
+      return CHAINS_3.map(function(a){ return a.slice(); });
+    }
+
+    // ---- Beep + flash ----
+    var audioCtx=null;
+    function ensureAudio(){ if(!audioCtx){ try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;} } if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume(); }
+    function beep(freq,durMs,when){ if(!audioCtx)return; try{ var t=audioCtx.currentTime+(when||0); var o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type='square'; o.frequency.value=freq; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.3,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+durMs/1000);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+durMs/1000+0.02);}catch(e){} }
+    var flashEl=document.getElementById('flash');
+    function flash(c){ flashEl.style.background=c||'#2ecc71'; flashEl.classList.add('show'); setTimeout(function(){flashEl.classList.remove('show');},300); }
+    function sigCombo(){ beep(900,80); }
+    function sigRoundStart(){ flash('#2ecc71'); beep(880,150); beep(1320,200,0.18); }
+    function sigRest(){ flash('#ffb020'); beep(440,250); }
+    function sigEnd(){ flash('#00d4ff'); beep(660,150); beep(660,150,0.2); beep(990,400,0.4); }
+    function tickWarn(){ beep(700,90); }
+
+    // ---- Seleções ----
+    var sel = { mode:'random', level:1 };
+    var cfg = { rounds:3, work:120, rest:45, interval:5 };
+
+    var modeScreen=document.getElementById('modeScreen'), levelScreen=document.getElementById('levelScreen'),
+        configScreen=document.getElementById('config'), runScreen=document.getElementById('run');
+
+    function fmt(s){ var m=Math.floor(s/60),r=s%60; return m+':'+String(r).padStart(2,'0'); }
+    function modeName(){ return sel.mode==='random'?'Random':'Sequência'; }
+    function levelName(){ return 'Combos '+sel.level+'.0'; }
+
+    // navegação entre telas de escolha
+    Array.from(document.querySelectorAll('#modeScreen .focusable')).forEach(function(b){
+      b.addEventListener('click', function(){
+        sel.mode=b.getAttribute('data-mode');
+        document.getElementById('modeCrumb').textContent='Modo: '+modeName();
+        show(levelScreen);
+      });
+    });
+    Array.from(document.querySelectorAll('#levelScreen .focusable')).forEach(function(b){
+      b.addEventListener('click', function(){
+        sel.level=parseInt(b.getAttribute('data-level'),10);
+        document.getElementById('cfgCrumb').textContent=modeName()+' · '+levelName();
+        // intervalo default um pouco maior em níveis encadeados
+        cfg.interval = sel.level===1?5:(sel.level===2?7:9);
+        renderConfig();
+        show(configScreen);
+      });
+    });
+
+    function renderConfig(){
+      document.getElementById('v-rounds').textContent=cfg.rounds;
+      document.getElementById('v-work').textContent=fmt(cfg.work);
+      document.getElementById('v-rest').textContent=fmt(cfg.rest);
+      document.getElementById('v-interval').textContent=cfg.interval+' s';
+    }
+    function adjust(key,dir){
+      if(key==='rounds')   cfg.rounds=Math.max(1,Math.min(20,cfg.rounds+dir));
+      if(key==='work')     cfg.work=Math.max(15,Math.min(600,cfg.work+dir*15));
+      if(key==='rest')     cfg.rest=Math.max(0,Math.min(300,cfg.rest+dir*15));
+      if(key==='interval') cfg.interval=Math.max(2,Math.min(20,cfg.interval+dir));
+      renderConfig();
+    }
+
+    // ---- Execução ----
+    var clockEl=document.getElementById('clock'), phaseLbl=document.getElementById('phaseLbl'),
+        roundLbl=document.getElementById('roundLbl'), comboNums=document.getElementById('comboNums'),
+        comboText=document.getElementById('comboText'), pauseBtn=document.getElementById('pauseBtn');
+
+    var timer=null, paused=false, phase='work', round=1, remaining=0, sinceCombo=0;
+    var pool=[], seqPtr=0, lastKey='';
+
+    function setPhase(p){
+      phase=p;
+      phaseLbl.className='phase '+(p==='work'?'work':'rest');
+      phaseLbl.textContent = p==='work'?'LUTA':p==='rest'?'DESCANSO':'FIM';
+    }
+    function showHead(){ clockEl.textContent=fmt(remaining); roundLbl.textContent='Round '+round+' / '+cfg.rounds; }
+
+    function nextItem(){
+      var item;
+      if(sel.mode==='seq'){
+        item = pool[seqPtr % pool.length];
+        seqPtr++;
+      } else {
+        var i = Math.floor(Math.random()*pool.length);
+        if(pool.length>1 && pool[i].join('-')===lastKey) i=(i+1)%pool.length;
+        item = pool[i];
+      }
+      lastKey = item.join('-');
+      renderItem(item);
+      sigCombo();
+    }
+
+    function renderItem(nums){
+      var n = nums.length;                       // 1, 2 ou 3
+      comboNums.className = 'n'+n;
+      comboText.className = (n===1?'t1':n===2?'t2':'t3');
+      // números em destaque
+      comboNums.innerHTML='';
+      nums.forEach(function(num, idx){
+        if(idx>0){ var p=document.createElement('span'); p.className='numPlus'; p.textContent='+'; comboNums.appendChild(p); }
+        var c=document.createElement('span'); c.className='numChip'; c.textContent=num; comboNums.appendChild(c);
+      });
+      // texto dos golpes
+      if(n===1){
+        comboText.textContent = COMBOS[nums[0]-1] || '';
+      } else {
+        comboText.innerHTML = nums.map(function(num){
+          return '<span class="seqLine"><span class="sn">'+num+'</span>'+(COMBOS[num-1]||'')+'</span>';
+        }).join('');
+      }
+    }
+
+    function startSession(){
+      ensureAudio();
+      pool = buildPool(sel.level);
+      seqPtr = 0; lastKey=''; round=1;
+      setPhase('work'); remaining=cfg.work; sinceCombo=0;
+      show(runScreen);
+      paused=false; pauseBtn.textContent='Pausar';
+      sigRoundStart(); nextItem(); showHead();
+      runTimer();
+    }
+    function runTimer(){
+      clearInterval(timer);
+      timer=setInterval(function(){
+        if(paused) return;
+        remaining--; sinceCombo++;
+        if(remaining>0 && remaining<=3) tickWarn();
+        if(phase==='work' && sinceCombo>=cfg.interval){ sinceCombo=0; nextItem(); }
+        if(remaining<=0) nextPhase();
+        showHead();
+      },1000);
+    }
+    function nextPhase(){
+      if(phase==='work'){
+        if(round>=cfg.rounds){ finish(); return; }
+        if(cfg.rest>0){ setPhase('rest'); remaining=cfg.rest; sigRest(); showRest(); }
+        else { round++; setPhase('work'); remaining=cfg.work; sinceCombo=0; sigRoundStart(); nextItem(); }
+      } else if(phase==='rest'){
+        round++; setPhase('work'); remaining=cfg.work; sinceCombo=0; sigRoundStart(); nextItem();
+      }
+    }
+    function showRest(){
+      comboNums.className='n1'; comboNums.innerHTML='';
+      comboText.className='t1 rest'; comboText.textContent='Descanso — respire';
+    }
+    function finish(){
+      clearInterval(timer); setPhase('done'); remaining=0; showHead();
+      comboNums.className='n1'; comboNums.innerHTML='';
+      comboText.className='t1'; comboText.textContent='Treino concluído'; sigEnd();
+    }
+    function stopSession(){ clearInterval(timer); show(modeScreen); }
+
+    document.getElementById('startBtn').addEventListener('click', startSession);
+    pauseBtn.addEventListener('click', function(){ paused=!paused; this.textContent=paused?'Retomar':'Pausar'; });
+    document.getElementById('nextBtn').addEventListener('click', function(){ if(phase==='work'){ sinceCombo=0; nextItem(); } });
+    document.getElementById('stopBtn').addEventListener('click', stopSession);
+    Array.from(document.querySelectorAll('#config .row')).forEach(function(row){
+      row.addEventListener('click', function(){ adjust(row.getAttribute('data-key'), +1); });
+    });
+
+    // ---- Navegação ----
+    function show(screen){
+      [modeScreen,levelScreen,configScreen,runScreen].forEach(function(s){ s.classList.remove('active'); });
+      screen.classList.add('active');
+      focusFirst();
+    }
+    function focusFirst(){
+      var f=Array.from(document.querySelectorAll('.screen.active .focusable')).filter(function(el){return el.offsetParent!==null;});
+      if(f.length) f[0].focus();
+    }
+    document.addEventListener('keydown', function(e){
+      ensureAudio();
+      var f=Array.from(document.querySelectorAll('.screen.active .focusable')).filter(function(el){return el.offsetParent!==null;});
+      if(!f.length) return;
+      var idx=f.indexOf(document.activeElement), active=document.activeElement;
+      var key=active&&active.getAttribute?active.getAttribute('data-key'):null;
+      switch(e.key){
+        case DPAD.UP: idx=idx>0?idx-1:f.length-1; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.DOWN: idx=idx<f.length-1?idx+1:0; f[idx].focus(); e.preventDefault(); break;
+        case DPAD.LEFT:
+          if(key){ adjust(key,-1); e.preventDefault(); }
+          else { idx=idx>0?idx-1:f.length-1; f[idx].focus(); e.preventDefault(); } break;
+        case DPAD.RIGHT:
+          if(key){ adjust(key,+1); e.preventDefault(); }
+          else { idx=idx<f.length-1?idx+1:0; f[idx].focus(); e.preventDefault(); } break;
+        case DPAD.SELECT:
+          if(active.classList.contains('focusable')){ active.click(); e.preventDefault(); } break;
+      }
+    });
+
+    renderConfig();
+    focusFirst();
+  </script>
+</body>
+</html>
