@@ -81,6 +81,27 @@
     #runControls { margin-top: 16px; display: flex; gap: 14px; }
     #runControls button.focusable { min-height: 58px; font-size: 18px; padding: 0 20px; }
 
+    /* APRENDER */
+    #learn { justify-content: flex-start; padding-top: 18px; }
+    #learnHead { display: flex; justify-content: space-between; width: 540px; font-size: 18px; color: #aaa; }
+    #learnHead #learnCrumb { color: #00d4ff; }
+    #cardViewport { margin-top: 14px; width: 560px; height: 320px; overflow: hidden; position: relative; }
+    #card {
+      width: 552px; min-height: 300px; margin: 0 auto; border-radius: 24px;
+      background: linear-gradient(160deg, #0b0b0b, #161616); border: 2px solid #2a2a2a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px;
+      transition: transform 160ms ease, opacity 160ms ease; will-change: transform;
+    }
+    #card:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 24px rgba(0,212,255,0.45); }
+    #card.swipe-left { transform: translateX(-46px); opacity: 0; }
+    #card.swipe-right { transform: translateX(46px); opacity: 0; }
+    #cardHint { font-size: 14px; color: #555; letter-spacing: 2px; margin-top: 4px; }
+    #dots { display: flex; gap: 7px; margin-top: 14px; flex-wrap: wrap; justify-content: center; max-width: 520px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #333; }
+    .dot.on { background: #00e0ff; box-shadow: 0 0 8px rgba(0,224,255,0.7); }
+    #learnControls { margin-top: 16px; display: flex; gap: 14px; }
+    #learnControls button.focusable { min-height: 58px; font-size: 18px; padding: 0 22px; }
+
     #flash { position: absolute; inset: 0; background: #2ecc71; opacity: 0; z-index: 50; pointer-events: none; transition: opacity 90ms; }
     #flash.show { opacity: 0.8; }
     .hidden { display: none !important; }
@@ -97,6 +118,7 @@
       <div class="pickList">
         <button class="focusable" data-mode="random"><span class="big">🎲 Random</span><span class="small">Sorteia os combos em ordem aleatória</span></button>
         <button class="focusable" data-mode="seq"><span class="big">🔢 Sequência</span><span class="small">Combos em ordem, do primeiro ao último</span></button>
+        <button class="focusable" data-mode="learn"><span class="big">📚 Aprender</span><span class="small">Cards sem tempo · arraste ◀ ▶ para navegar</span></button>
       </div>
     </div>
 
@@ -139,6 +161,27 @@
         <button id="pauseBtn" class="focusable">Pausar</button>
         <button id="nextBtn" class="focusable">Próximo</button>
         <button id="stopBtn" class="focusable">Parar</button>
+      </div>
+    </div>
+
+    <!-- APRENDER (cards, sem tempo) -->
+    <div id="learn" class="screen">
+      <div id="learnHead">
+        <span id="learnCrumb">Aprender · Combos 1.0</span>
+        <span id="learnCounter">1 / 18</span>
+      </div>
+      <div id="cardViewport">
+        <div id="card" class="focusable" tabindex="0">
+          <div id="cardNums" class="n1"></div>
+          <div id="cardText" class="t1"></div>
+          <div id="cardHint">◀ arraste ▶</div>
+        </div>
+      </div>
+      <div id="dots"></div>
+      <div id="learnControls">
+        <button id="prevCardBtn" class="focusable">◀ Anterior</button>
+        <button id="learnExitBtn" class="focusable">Sair</button>
+        <button id="nextCardBtn" class="focusable">Próximo ▶</button>
       </div>
     </div>
   </div>
@@ -206,10 +249,11 @@
     var cfg = { rounds:3, work:120, rest:45, interval:5 };
 
     var modeScreen=document.getElementById('modeScreen'), levelScreen=document.getElementById('levelScreen'),
-        configScreen=document.getElementById('config'), runScreen=document.getElementById('run');
+        configScreen=document.getElementById('config'), runScreen=document.getElementById('run'),
+        learnScreen=document.getElementById('learn');
 
     function fmt(s){ var m=Math.floor(s/60),r=s%60; return m+':'+String(r).padStart(2,'0'); }
-    function modeName(){ return sel.mode==='random'?'Random':'Sequência'; }
+    function modeName(){ return sel.mode==='random'?'Random':sel.mode==='seq'?'Sequência':'Aprender'; }
     function levelName(){ return 'Combos '+sel.level+'.0'; }
 
     // navegação entre telas de escolha
@@ -223,6 +267,7 @@
     Array.from(document.querySelectorAll('#levelScreen .focusable')).forEach(function(b){
       b.addEventListener('click', function(){
         sel.level=parseInt(b.getAttribute('data-level'),10);
+        if(sel.mode==='learn'){ startLearn(); return; }
         document.getElementById('cfgCrumb').textContent=modeName()+' · '+levelName();
         // intervalo default um pouco maior em níveis encadeados
         cfg.interval = sel.level===1?5:(sel.level===2?7:9);
@@ -275,24 +320,27 @@
       sigCombo();
     }
 
-    function renderItem(nums){
+    function renderInto(numsEl, textEl, nums){
       var n = nums.length;                       // 1, 2 ou 3
-      comboNums.className = 'n'+n;
-      comboText.className = (n===1?'t1':n===2?'t2':'t3');
+      numsEl.className = 'n'+n;
+      textEl.className = (n===1?'t1':n===2?'t2':'t3');
       // números em destaque
-      comboNums.innerHTML='';
+      numsEl.innerHTML='';
       nums.forEach(function(num, idx){
-        if(idx>0){ var p=document.createElement('span'); p.className='numPlus'; p.textContent='+'; comboNums.appendChild(p); }
-        var c=document.createElement('span'); c.className='numChip'; c.textContent=num; comboNums.appendChild(c);
+        if(idx>0){ var p=document.createElement('span'); p.className='numPlus'; p.textContent='+'; numsEl.appendChild(p); }
+        var c=document.createElement('span'); c.className='numChip'; c.textContent=num; numsEl.appendChild(c);
       });
       // texto dos golpes
       if(n===1){
-        comboText.textContent = COMBOS[nums[0]-1] || '';
+        textEl.textContent = COMBOS[nums[0]-1] || '';
       } else {
-        comboText.innerHTML = nums.map(function(num){
+        textEl.innerHTML = nums.map(function(num){
           return '<span class="seqLine"><span class="sn">'+num+'</span>'+(COMBOS[num-1]||'')+'</span>';
         }).join('');
       }
+    }
+    function renderItem(nums){
+      renderInto(comboNums, comboText, nums);
     }
 
     function startSession(){
@@ -344,9 +392,72 @@
       row.addEventListener('click', function(){ adjust(row.getAttribute('data-key'), +1); });
     });
 
+    // ---- Modo APRENDER (cards, sem tempo) ----
+    var cardNums=document.getElementById('cardNums'), cardText=document.getElementById('cardText'),
+        cardEl=document.getElementById('card'), learnCrumb=document.getElementById('learnCrumb'),
+        learnCounter=document.getElementById('learnCounter'), dotsEl=document.getElementById('dots');
+    var learnPool=[], learnIdx=0, animating=false;
+
+    function startLearn(){
+      learnPool = buildPool(sel.level);   // sempre em sequência
+      learnIdx = 0;
+      learnCrumb.textContent = 'Aprender · '+levelName();
+      renderDots();
+      renderCard(0);
+      show(learnScreen);
+    }
+    function renderDots(){
+      dotsEl.innerHTML='';
+      learnPool.forEach(function(_, i){
+        var d=document.createElement('span'); d.className='dot'+(i===learnIdx?' on':''); dotsEl.appendChild(d);
+      });
+    }
+    function renderCard(){
+      renderInto(cardNums, cardText, learnPool[learnIdx]);
+      learnCounter.textContent = (learnIdx+1)+' / '+learnPool.length;
+      renderDots();
+    }
+    function goCard(dir){   // dir: +1 próximo, -1 anterior
+      if(animating || !learnPool.length) return;
+      var next = learnIdx + dir;
+      if(next < 0) next = learnPool.length - 1;
+      if(next >= learnPool.length) next = 0;
+      animating = true;
+      cardEl.classList.add(dir>0 ? 'swipe-left' : 'swipe-right');
+      setTimeout(function(){
+        learnIdx = next;
+        renderCard();
+        cardEl.classList.remove('swipe-left','swipe-right');
+        // entra pelo lado oposto
+        cardEl.classList.add(dir>0 ? 'swipe-right' : 'swipe-left');
+        requestAnimationFrame(function(){
+          requestAnimationFrame(function(){
+            cardEl.classList.remove('swipe-left','swipe-right');
+            animating = false;
+          });
+        });
+      }, 160);
+    }
+    document.getElementById('prevCardBtn').addEventListener('click', function(){ goCard(-1); });
+    document.getElementById('nextCardBtn').addEventListener('click', function(){ goCard(+1); });
+    document.getElementById('learnExitBtn').addEventListener('click', function(){ show(modeScreen); });
+
+    // Arrastar com dedo/mouse (teste no desktop; nos óculos o swipe vira ◀ ▶)
+    var dragX=null;
+    cardEl.addEventListener('touchstart', function(e){ dragX=e.touches[0].clientX; }, {passive:true});
+    cardEl.addEventListener('touchend', function(e){
+      if(dragX===null) return; var dx=e.changedTouches[0].clientX-dragX; dragX=null;
+      if(Math.abs(dx)>40) goCard(dx<0 ? +1 : -1);
+    }, {passive:true});
+    cardEl.addEventListener('mousedown', function(e){ dragX=e.clientX; });
+    cardEl.addEventListener('mouseup', function(e){
+      if(dragX===null) return; var dx=e.clientX-dragX; dragX=null;
+      if(Math.abs(dx)>40) goCard(dx<0 ? +1 : -1);
+    });
+
     // ---- Navegação ----
     function show(screen){
-      [modeScreen,levelScreen,configScreen,runScreen].forEach(function(s){ s.classList.remove('active'); });
+      [modeScreen,levelScreen,configScreen,runScreen,learnScreen].forEach(function(s){ s.classList.remove('active'); });
       screen.classList.add('active');
       focusFirst();
     }
@@ -356,6 +467,11 @@
     }
     document.addEventListener('keydown', function(e){
       ensureAudio();
+      // Modo Aprender: ◀ ▶ trocam o card (equivale ao swipe nos óculos)
+      if(learnScreen.classList.contains('active')){
+        if(e.key===DPAD.LEFT){ goCard(-1); e.preventDefault(); return; }
+        if(e.key===DPAD.RIGHT){ goCard(+1); e.preventDefault(); return; }
+      }
       var f=Array.from(document.querySelectorAll('.screen.active .focusable')).filter(function(el){return el.offsetParent!==null;});
       if(!f.length) return;
       var idx=f.indexOf(document.activeElement), active=document.activeElement;
