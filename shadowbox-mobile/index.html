@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Shadowbox - versao mobile responsiva (celular e tablet). Idiomas PT/EN/ES, modos random/sequencia/aprender, niveis 1.0/2.0/3.0.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Shadowbox</title>
+  <style>
+    :root{
+      --bg:#000; --panel:#0e0e0e; --panel2:#161616; --line:#2a2a2a;
+      --cyan:#00d4ff; --cyan2:#00e0ff; --green:#2ecc71; --amber:#ffb020; --red:#e11d2a;
+      --maxw: 640px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    html,body{ background:var(--bg); color:#fff; font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+      -webkit-user-select:none; user-select:none; }
+    body{ min-height:100dvh; }
+    #app{ max-width:var(--maxw); margin:0 auto; min-height:100dvh;
+      padding: calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 16px);
+      position:relative; }
+    .screen{ display:none; flex-direction:column; align-items:center; min-height: calc(100dvh - 30px); }
+    .screen.active{ display:flex; }
+
+    .titleRow{ display:flex; align-items:center; gap:12px; margin-top:6px; }
+    .glove{ width: clamp(34px,9vw,46px); height:clamp(34px,9vw,46px); flex:0 0 auto; }
+    h1{ font-size: clamp(26px,7vw,34px); color:var(--cyan); }
+    .crumb{ font-size: clamp(13px,3.6vw,16px); color:var(--cyan); margin-top:10px; text-align:center; }
+    .sub{ font-size: clamp(13px,3.6vw,15px); color:#888; margin-top:8px; text-align:center; }
+
+    .pickList{ margin-top:auto; margin-bottom:auto; display:flex; flex-direction:column; gap:14px; width:100%; padding: 20px 0; }
+    .btn{ width:100%; background:var(--panel); color:#fff; border:2px solid var(--line); border-radius:18px;
+      min-height:74px; padding: 12px 20px; cursor:pointer; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:4px; transition: border-color .12s, transform .05s; }
+    .btn:active{ transform: scale(0.98); border-color:var(--cyan); }
+    .btn .big{ font-size: clamp(19px,5vw,23px); font-weight:700; }
+    .btn .small{ font-size: clamp(12px,3.3vw,14px); color:#9a9a9a; font-weight:400; }
+
+    .primary{ background: linear-gradient(135deg, #00d4ff, #0095c8); color:#001318; border-color:transparent; font-weight:800; }
+    .primary .big{ color:#001318; }
+
+    /* Config */
+    .rows{ width:100%; display:flex; flex-direction:column; gap:12px; margin: 14px 0; }
+    .row{ background:var(--panel); border:2px solid var(--line); border-radius:16px; padding:12px 14px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .row .lbl{ font-size: clamp(15px,4vw,18px); color:#ddd; flex:1; }
+    .stepper{ display:flex; align-items:center; gap:10px; }
+    .step{ width:48px; height:48px; border-radius:12px; border:2px solid var(--line); background:#000; color:var(--cyan2);
+      font-size:26px; font-weight:800; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+    .step:active{ transform:scale(0.94); border-color:var(--cyan); }
+    .val{ font-size: clamp(20px,5.4vw,26px); font-weight:800; color:var(--cyan2); min-width:84px; text-align:center; font-variant-numeric:tabular-nums; }
+
+    /* Run */
+    #run{ justify-content:flex-start; }
+    #runHead{ width:100%; display:flex; justify-content:space-between; font-size: clamp(15px,4vw,19px); color:#aaa; margin-top:8px; }
+    #runHead .phase{ font-weight:800; letter-spacing:1px; }
+    #runHead .phase.work{ color:var(--green); } #runHead .phase.rest{ color:var(--amber); }
+    #clock{ font-size: clamp(40px,12vw,58px); font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
+    #comboBox{ margin-top:14px; width:100%; flex:1; min-height:0; border-radius:22px;
+      background:linear-gradient(160deg,#0a0a0a,#141414); border:2px solid #222;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px; gap:14px; }
+    #comboNums{ display:flex; align-items:center; justify-content:center; gap: 3vw; flex-wrap:wrap; }
+    .numChip{ font-weight:900; color:var(--cyan2); line-height:1; background:rgba(0,224,255,0.10);
+      border:3px solid var(--cyan2); border-radius:16px; padding: 1.5vh 4vw; text-shadow:0 0 18px rgba(0,224,255,0.5); }
+    .numPlus{ color:#555; font-weight:700; }
+    .n1 .numChip{ font-size: clamp(70px,22vw,150px); }
+    .n2 .numChip{ font-size: clamp(52px,15vw,104px); }
+    .n3 .numChip{ font-size: clamp(40px,11vw,80px); }
+    .n1 .numPlus{ font-size: clamp(30px,9vw,60px);} .n2 .numPlus{ font-size: clamp(26px,7vw,52px);} .n3 .numPlus{ font-size: clamp(20px,5vw,40px);}
+    #comboText{ color:#fff; text-align:center; line-height:1.15; font-weight:700; }
+    #comboText.rest{ color:var(--amber); }
+    .t1{ font-size: clamp(22px,6vw,34px);} .t2{ font-size: clamp(17px,4.6vw,24px);} .t3{ font-size: clamp(15px,4vw,20px);}
+    .seqLine{ display:block; margin:3px 0; }
+    .seqLine .sn{ color:var(--cyan2); font-weight:900; margin-right:8px; }
+
+    .ctrlRow{ width:100%; display:flex; gap:10px; margin-top:14px; }
+    .ctrlRow .btn{ min-height:60px; flex:1; flex-direction:row; }
+    .ctrlRow .btn .big{ font-size: clamp(15px,4vw,18px); }
+
+    /* Aprender */
+    #learnHead{ width:100%; display:flex; justify-content:space-between; font-size: clamp(13px,3.6vw,18px); color:#aaa; margin-top:8px; }
+    #learnHead #learnCrumb{ color:var(--cyan); }
+    #cardWrap{ width:100%; flex:1; min-height:0; display:flex; align-items:center; }
+    #card{ width:100%; min-height: 46vh; border-radius:24px; background:linear-gradient(160deg,#0b0b0b,#161616);
+      border:2px solid var(--line); display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:18px; padding:22px; transition: transform .16s ease, opacity .16s ease; touch-action: pan-y; }
+    #card.swipe-left{ transform:translateX(-12vw); opacity:0; } #card.swipe-right{ transform:translateX(12vw); opacity:0; }
+    #dots{ display:flex; gap:7px; margin-top:12px; flex-wrap:wrap; justify-content:center; }
+    .dot{ width:9px; height:9px; border-radius:50%; background:#333; } .dot.on{ background:var(--cyan2); box-shadow:0 0 8px rgba(0,224,255,.7);}
+
+    #flash{ position:fixed; inset:0; background:var(--green); opacity:0; z-index:50; pointer-events:none; transition:opacity .09s; }
+    #flash.show{ opacity:.8; }
+    .hidden{ display:none !important; }
+  </style>
+</head>
+<body>
+  <div id="flash"></div>
+  <div id="app">
+
+    <!-- IDIOMA -->
+    <div id="langScreen" class="screen active">
+      <div class="titleRow">
+        <svg class="glove" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M10 17c0-7 5-10 11-10h7c8 0 11 5 11 13v6c0 5-3 8-8 8H18c-5 0-8-3-8-8z" fill="#e11d2a"/>
+          <path d="M10 22c-4 .5-6 3-6 7s2 6 6 6z" fill="#c4121f"/>
+          <rect x="16" y="34" width="24" height="9" rx="3" fill="#a30f1a"/>
+          <rect x="16" y="37" width="24" height="2.5" fill="#7a0b13"/>
+          <path d="M22 11c4-1 9-1 13 1" stroke="#ff5a63" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <h1>Shadowbox</h1>
+      </div>
+      <div class="sub">Idioma · Language · Idioma</div>
+      <div class="pickList">
+        <div class="btn" data-lang="pt"><span class="big">🇧🇷 Português</span></div>
+        <div class="btn" data-lang="en"><span class="big">🇺🇸 English</span></div>
+        <div class="btn" data-lang="es"><span class="big">🇪🇸 Español</span></div>
+      </div>
+    </div>
+
+    <!-- MODO -->
+    <div id="modeScreen" class="screen">
+      <div class="titleRow">
+        <svg class="glove" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M10 17c0-7 5-10 11-10h7c8 0 11 5 11 13v6c0 5-3 8-8 8H18c-5 0-8-3-8-8z" fill="#e11d2a"/>
+          <path d="M10 22c-4 .5-6 3-6 7s2 6 6 6z" fill="#c4121f"/>
+          <rect x="16" y="34" width="24" height="9" rx="3" fill="#a30f1a"/>
+          <rect x="16" y="37" width="24" height="2.5" fill="#7a0b13"/>
+        </svg>
+        <h1 id="modeTitle">Shadowbox</h1>
+      </div>
+      <div class="sub" id="modeSub"></div>
+      <div class="pickList">
+        <div class="btn" data-mode="random"><span class="big" id="t-random"></span><span class="small" id="t-randomSub"></span></div>
+        <div class="btn" data-mode="seq"><span class="big" id="t-seq"></span><span class="small" id="t-seqSub"></span></div>
+        <div class="btn" data-mode="learn"><span class="big" id="t-learn"></span><span class="small" id="t-learnSub"></span></div>
+      </div>
+    </div>
+
+    <!-- NÍVEL -->
+    <div id="levelScreen" class="screen">
+      <h1 id="levelTitle" style="margin-top:10px">Nível</h1>
+      <div class="crumb" id="modeCrumb"></div>
+      <div class="pickList">
+        <div class="btn" data-level="1"><span class="big">Combos 1.0</span><span class="small" id="t-lvl1"></span></div>
+        <div class="btn" data-level="2"><span class="big">Combos 2.0</span><span class="small" id="t-lvl2"></span></div>
+        <div class="btn" data-level="3"><span class="big">Combos 3.0</span><span class="small" id="t-lvl3"></span></div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="config" class="screen">
+      <h1 id="cfgTitle" style="margin-top:10px">Round Timer</h1>
+      <div class="crumb" id="cfgCrumb"></div>
+      <div class="rows">
+        <div class="row"><span class="lbl" id="t-rounds">Rounds</span><div class="stepper"><div class="step" data-key="rounds" data-d="-1">−</div><span class="val" id="v-rounds">3</span><div class="step" data-key="rounds" data-d="1">+</div></div></div>
+        <div class="row"><span class="lbl" id="t-work">Execução</span><div class="stepper"><div class="step" data-key="work" data-d="-1">−</div><span class="val" id="v-work">2:00</span><div class="step" data-key="work" data-d="1">+</div></div></div>
+        <div class="row"><span class="lbl" id="t-rest">Descanso</span><div class="stepper"><div class="step" data-key="rest" data-d="-1">−</div><span class="val" id="v-rest">0:45</span><div class="step" data-key="rest" data-d="1">+</div></div></div>
+        <div class="row"><span class="lbl" id="t-interval">Intervalo</span><div class="stepper"><div class="step" data-key="interval" data-d="-1">−</div><span class="val" id="v-interval">5 s</span><div class="step" data-key="interval" data-d="1">+</div></div></div>
+      </div>
+      <div class="ctrlRow">
+        <div class="btn" id="cfgBackBtn"><span class="big" id="t-back2">◀</span></div>
+        <div class="btn primary" id="startBtn" style="flex:3"><span class="big">▶ <span id="t-start">Iniciar</span></span></div>
+      </div>
+    </div>
+
+    <!-- RUN -->
+    <div id="run" class="screen">
+      <div id="runHead"><span class="phase work" id="phaseLbl">LUTA</span><span id="roundLbl">Round 1 / 3</span></div>
+      <div id="clock">2:00</div>
+      <div id="comboBox"><div id="comboNums" class="n1"></div><div id="comboText" class="t1"></div></div>
+      <div class="ctrlRow">
+        <div class="btn" id="pauseBtn"><span class="big">Pausar</span></div>
+        <div class="btn" id="nextBtn"><span class="big">Próximo</span></div>
+        <div class="btn" id="stopBtn"><span class="big">Parar</span></div>
+      </div>
+    </div>
+
+    <!-- APRENDER -->
+    <div id="learn" class="screen">
+      <div id="learnHead"><span id="learnCrumb">Aprender</span><span id="learnCounter">1 / 18</span></div>
+      <div id="cardWrap">
+        <div id="card"><div id="cardNums" class="n1"></div><div id="cardText" class="t1"></div></div>
+      </div>
+      <div id="dots"></div>
+      <div class="ctrlRow">
+        <div class="btn" id="prevCardBtn"><span class="big">◀</span></div>
+        <div class="btn" id="learnExitBtn"><span class="big" id="t-exit">Sair</span></div>
+        <div class="btn" id="nextCardBtn"><span class="big">▶</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== Dados (idênticos à versão dos óculos) ===== */
+    var TOKENS = {
+      'Jab':{pt:'Jab',en:'Jab',es:'Jab'},'Cross':{pt:'Direto',en:'Cross',es:'Directo'},
+      'Hook':{pt:'Gancho',en:'Hook',es:'Gancho'},'Upper':{pt:'Uppercut',en:'Uppercut',es:'Uppercut'},
+      'Duck':{pt:'Esquiva baixa',en:'Duck',es:'Agachada'},'Duck L':{pt:'Esquiva baixa E',en:'Duck L',es:'Agachada I'},
+      'Duck R':{pt:'Esquiva baixa D',en:'Duck R',es:'Agachada D'},'Block L':{pt:'Defesa E',en:'Block L',es:'Bloqueo I'},
+      'Block R':{pt:'Defesa D',en:'Block R',es:'Bloqueo D'},'Block Kick L':{pt:'Defesa chute E',en:'Block Kick L',es:'Bloqueo patada I'},
+      'Block Kick R':{pt:'Defesa chute D',en:'Block Kick R',es:'Bloqueo patada D'},'Kick L':{pt:'Chute E',en:'Kick L',es:'Patada I'},
+      'Kick R':{pt:'Chute D',en:'Kick R',es:'Patada D'},'Switch':{pt:'Troca',en:'Switch',es:'Cambio'},
+      '5 Elbows':{pt:'5 Cotoveladas',en:'5 Elbows',es:'5 Codazos'},'3 Knees':{pt:'3 Joelhadas',en:'3 Knees',es:'3 Rodillazos'},
+      'Esq L':{pt:'Esquiva E',en:'Slip L',es:'Esquiva I'},'Esq R':{pt:'Esquiva D',en:'Slip R',es:'Esquiva D'},
+      'Front 1':{pt:'Frontal 1',en:'Front 1',es:'Frontal 1'},'Front 2':{pt:'Frontal 2',en:'Front 2',es:'Frontal 2'},
+      'Round 2':{pt:'Circular 2',en:'Round 2',es:'Circular 2'},'Round Side':{pt:'Circular lateral',en:'Round Side',es:'Circular lateral'},
+      'Round Side Full':{pt:'Circular lateral full',en:'Round Side Full',es:'Circular lateral full'}
+    };
+    var COMBO_TOKENS = [
+      ['Jab'],['Jab','Cross'],['Cross','Hook','Cross'],['Jab','Cross','Hook','Cross'],
+      ['Upper','Hook','Cross','Upper'],['Upper','Cross','Hook','Upper'],
+      ['Duck L','Hook','Cross','Hook'],['Duck R','Cross','Hook','Cross'],
+      ['Esq L','Jab','Cross'],['Esq R','Cross','Jab'],
+      ['Block L','Duck','Hook','Hook','Cross','Hook'],['Block R','Duck','Hook','Upper','Hook','Cross'],
+      ['Block Kick L','Hook','Cross','Kick R'],['Block Kick R','Cross','Hook','Switch','Kick L'],
+      ['5 Elbows','3 Knees'],['5 Elbows','3 Knees'],
+      ['Front 1','Round 2','Round Side Full'],['Front 2','Switch','Round 2','Round Side']
+    ];
+    var CHAINS_2 = [[2,14],[3,13],[4,7],[5,9],[6,10],[7,15],[8,16],[9,12],[10,11]];
+    var CHAINS_3 = [[2,14,12],[3,13,11],[4,7,8],[5,9,17],[6,10,18],[7,15,17],[8,16,14],[9,12,17],[10,11,18]];
+    var UI = {
+      pt:{ modeSub:'Toque para escolher o modo.', random:'🎲 Random', randomSub:'Sorteia os combos aleatoriamente',
+           seq:'🔢 Sequência', seqSub:'Combos em ordem, do 1 ao último', learn:'📚 Aprender', learnSub:'Cards sem tempo · arraste para o lado',
+           levelTitle:'Nível', lvl1:'18 combos individuais (1 a 18)', lvl2:'9 encadeamentos de 2 combos', lvl3:'9 encadeamentos de 3 combos',
+           rounds:'Rounds', work:'Execução (round)', rest:'Descanso', interval:'Intervalo entre combos', start:'Iniciar',
+           luta:'LUTA', descanso:'DESCANSO', fim:'FIM', round:'Round', restMsg:'Descanso — respire', doneMsg:'Treino concluído',
+           pause:'Pausar', resume:'Retomar', next:'Próximo', stop:'Parar', exit:'Sair' },
+      en:{ modeSub:'Tap to choose a mode.', random:'🎲 Random', randomSub:'Calls combos in random order',
+           seq:'🔢 Sequence', seqSub:'Combos in order, 1 to last', learn:'📚 Learn', learnSub:'Cards, no timer · swipe sideways',
+           levelTitle:'Level', lvl1:'18 individual combos (1 to 18)', lvl2:'9 chains of 2 combos', lvl3:'9 chains of 3 combos',
+           rounds:'Rounds', work:'Work (round)', rest:'Rest', interval:'Interval between combos', start:'Start',
+           luta:'FIGHT', descanso:'REST', fim:'END', round:'Round', restMsg:'Rest — breathe', doneMsg:'Workout complete',
+           pause:'Pause', resume:'Resume', next:'Next', stop:'Stop', exit:'Exit' },
+      es:{ modeSub:'Toca para elegir un modo.', random:'🎲 Random', randomSub:'Combos en orden aleatorio',
+           seq:'🔢 Secuencia', seqSub:'Combos en orden, del 1 al último', learn:'📚 Aprender', learnSub:'Tarjetas sin tiempo · desliza al lado',
+           levelTitle:'Nivel', lvl1:'18 combos individuales (1 a 18)', lvl2:'9 cadenas de 2 combos', lvl3:'9 cadenas de 3 combos',
+           rounds:'Rounds', work:'Ejecución (round)', rest:'Descanso', interval:'Intervalo entre combos', start:'Iniciar',
+           luta:'PELEA', descanso:'DESCANSO', fim:'FIN', round:'Round', restMsg:'Descanso — respira', doneMsg:'Entrenamiento completo',
+           pause:'Pausar', resume:'Reanudar', next:'Siguiente', stop:'Parar', exit:'Salir' }
+    };
+
+    var lang='pt';
+    function T(k){ return UI[lang][k]; }
+    function buildPool(level){
+      if(level===1) return COMBO_TOKENS.map(function(_,i){ return [i+1]; });
+      if(level===2) return CHAINS_2.map(function(a){ return a.slice(); });
+      return CHAINS_3.map(function(a){ return a.slice(); });
+    }
+
+    // ---- Beep + flash ----
+    var audioCtx=null;
+    function ensureAudio(){ if(!audioCtx){ try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){audioCtx=null;} } if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume(); }
+    function beep(f,d,w){ if(!audioCtx)return; try{ var t=audioCtx.currentTime+(w||0); var o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type='square'; o.frequency.value=f; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.3,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d/1000);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+d/1000+0.02);}catch(e){} }
+    var flashEl=document.getElementById('flash');
+    function flash(c){ flashEl.style.background=c||'#2ecc71'; flashEl.classList.add('show'); setTimeout(function(){flashEl.classList.remove('show');},300); }
+    function sigCombo(){ beep(900,80); }
+    function sigRoundStart(){ flash('#2ecc71'); beep(880,150); beep(1320,200,0.18); }
+    function sigRest(){ flash('#ffb020'); beep(440,250); }
+    function sigEnd(){ flash('#00d4ff'); beep(660,150); beep(660,150,0.2); beep(990,400,0.4); }
+    function tickWarn(){ beep(700,90); }
+
+    var sel={mode:'random',level:1}, cfg={rounds:3,work:120,rest:45,interval:5};
+    var S = {
+      lang:document.getElementById('langScreen'), mode:document.getElementById('modeScreen'),
+      level:document.getElementById('levelScreen'), config:document.getElementById('config'),
+      run:document.getElementById('run'), learn:document.getElementById('learn')
+    };
+    function fmt(s){ var m=Math.floor(s/60),r=s%60; return m+':'+String(r).padStart(2,'0'); }
+    function modeName(){ return (sel.mode==='random'?T('random'):sel.mode==='seq'?T('seq'):T('learn')).replace(/^[^ ]+ /,''); }
+    function levelName(){ return 'Combos '+sel.level+'.0'; }
+
+    function applyLanguage(){
+      document.getElementById('modeSub').textContent=T('modeSub');
+      document.getElementById('t-random').textContent=T('random');
+      document.getElementById('t-randomSub').textContent=T('randomSub');
+      document.getElementById('t-seq').textContent=T('seq');
+      document.getElementById('t-seqSub').textContent=T('seqSub');
+      document.getElementById('t-learn').textContent=T('learn');
+      document.getElementById('t-learnSub').textContent=T('learnSub');
+      document.getElementById('levelTitle').textContent=T('levelTitle');
+      document.getElementById('t-lvl1').textContent=T('lvl1');
+      document.getElementById('t-lvl2').textContent=T('lvl2');
+      document.getElementById('t-lvl3').textContent=T('lvl3');
+      document.getElementById('t-rounds').textContent=T('rounds');
+      document.getElementById('t-work').textContent=T('work');
+      document.getElementById('t-rest').textContent=T('rest');
+      document.getElementById('t-interval').textContent=T('interval');
+      document.getElementById('t-start').textContent=T('start');
+      document.getElementById('t-exit').textContent=T('exit');
+    }
+
+    function tap(el, fn){ if(!el) return; el.addEventListener('click', function(e){ ensureAudio(); fn(e); }); }
+
+    // idioma / modo / nível
+    Array.from(document.querySelectorAll('#langScreen .btn')).forEach(function(b){
+      tap(b, function(){ lang=b.getAttribute('data-lang'); document.documentElement.lang=lang; applyLanguage(); show(S.mode); });
+    });
+    Array.from(document.querySelectorAll('#modeScreen .btn')).forEach(function(b){
+      tap(b, function(){ sel.mode=b.getAttribute('data-mode'); document.getElementById('modeCrumb').textContent=modeName(); show(S.level); });
+    });
+    Array.from(document.querySelectorAll('#levelScreen .btn')).forEach(function(b){
+      tap(b, function(){
+        sel.level=parseInt(b.getAttribute('data-level'),10);
+        if(sel.mode==='learn'){ startLearn(); return; }
+        document.getElementById('cfgCrumb').textContent=modeName()+' · '+levelName();
+        cfg.interval=sel.level===1?5:(sel.level===2?7:9); renderConfig(); show(S.config);
+      });
+    });
+
+    function renderConfig(){
+      document.getElementById('v-rounds').textContent=cfg.rounds;
+      document.getElementById('v-work').textContent=fmt(cfg.work);
+      document.getElementById('v-rest').textContent=fmt(cfg.rest);
+      document.getElementById('v-interval').textContent=cfg.interval+' s';
+    }
+    function adjust(key,dir){
+      if(key==='rounds')   cfg.rounds=Math.max(1,Math.min(20,cfg.rounds+dir));
+      if(key==='work')     cfg.work=Math.max(15,Math.min(600,cfg.work+dir*15));
+      if(key==='rest')     cfg.rest=Math.max(0,Math.min(300,cfg.rest+dir*15));
+      if(key==='interval') cfg.interval=Math.max(2,Math.min(20,cfg.interval+dir));
+      renderConfig();
+    }
+    Array.from(document.querySelectorAll('#config .step')).forEach(function(s){
+      tap(s, function(){ adjust(s.getAttribute('data-key'), parseInt(s.getAttribute('data-d'),10)); });
+    });
+    tap(document.getElementById('cfgBackBtn'), function(){ show(S.level); });
+
+    // render genérico
+    function renderInto(numsEl,textEl,nums){
+      var n=nums.length; numsEl.className='n'+n; textEl.className=(n===1?'t1':n===2?'t2':'t3'); numsEl.innerHTML='';
+      nums.forEach(function(num,idx){
+        if(idx>0){ var p=document.createElement('span'); p.className='numPlus'; p.textContent='+'; numsEl.appendChild(p); }
+        var c=document.createElement('span'); c.className='numChip'; c.textContent=num; numsEl.appendChild(c);
+      });
+      if(n===1){ textEl.textContent=COMBO_TOKENS[nums[0]-1].map(function(tk){return TOKENS[tk][lang];}).join(' + '); }
+      else { textEl.innerHTML=nums.map(function(num){ var t=COMBO_TOKENS[num-1].map(function(tk){return TOKENS[tk][lang];}).join(' + ');
+        return '<span class="seqLine"><span class="sn">'+num+'</span>'+t+'</span>'; }).join(''); }
+    }
+
+    // timer
+    var clockEl=document.getElementById('clock'), phaseLbl=document.getElementById('phaseLbl'), roundLbl=document.getElementById('roundLbl'),
+        comboNums=document.getElementById('comboNums'), comboText=document.getElementById('comboText');
+    var pauseLbl=document.querySelector('#pauseBtn .big'), nextLbl=document.querySelector('#nextBtn .big'), stopLbl=document.querySelector('#stopBtn .big');
+    var timer=null,paused=false,phase='work',round=1,remaining=0,sinceCombo=0,pool=[],seqPtr=0,lastKey='';
+    function setPhase(p){ phase=p; phaseLbl.className='phase '+(p==='work'?'work':'rest'); phaseLbl.textContent=p==='work'?T('luta'):p==='rest'?T('descanso'):T('fim'); }
+    function showHead(){ clockEl.textContent=fmt(remaining); roundLbl.textContent=T('round')+' '+round+' / '+cfg.rounds; }
+    function nextItem(){ var item; if(sel.mode==='seq'){ item=pool[seqPtr%pool.length]; seqPtr++; }
+      else { var i=Math.floor(Math.random()*pool.length); if(pool.length>1&&pool[i].join('-')===lastKey)i=(i+1)%pool.length; item=pool[i]; }
+      lastKey=item.join('-'); renderInto(comboNums,comboText,item); comboText.classList.remove('rest'); sigCombo(); }
+    function startSession(){ ensureAudio(); pool=buildPool(sel.level); seqPtr=0; lastKey=''; round=1; setPhase('work'); remaining=cfg.work; sinceCombo=0;
+      paused=false; pauseLbl.textContent=T('pause'); nextLbl.textContent=T('next'); stopLbl.textContent=T('stop');
+      show(S.run); sigRoundStart(); nextItem(); showHead(); runTimer(); }
+    function runTimer(){ clearInterval(timer); timer=setInterval(function(){ if(paused)return; remaining--; sinceCombo++;
+      if(remaining>0&&remaining<=3) tickWarn();
+      if(phase==='work'&&sinceCombo>=cfg.interval){ sinceCombo=0; nextItem(); }
+      if(remaining<=0) nextPhase(); showHead(); },1000); }
+    function nextPhase(){ if(phase==='work'){ if(round>=cfg.rounds){ finish(); return; }
+        if(cfg.rest>0){ setPhase('rest'); remaining=cfg.rest; sigRest(); showRest(); } else { round++; setPhase('work'); remaining=cfg.work; sinceCombo=0; sigRoundStart(); nextItem(); } }
+      else if(phase==='rest'){ round++; setPhase('work'); remaining=cfg.work; sinceCombo=0; sigRoundStart(); nextItem(); } }
+    function showRest(){ comboNums.className='n1'; comboNums.innerHTML=''; comboText.className='t1 rest'; comboText.textContent=T('restMsg'); }
+    function finish(){ clearInterval(timer); setPhase('done'); remaining=0; showHead(); comboNums.className='n1'; comboNums.innerHTML=''; comboText.className='t1'; comboText.textContent=T('doneMsg'); sigEnd(); }
+    tap(document.getElementById('startBtn'), startSession);
+    tap(document.getElementById('pauseBtn'), function(){ paused=!paused; pauseLbl.textContent=paused?T('resume'):T('pause'); });
+    tap(document.getElementById('nextBtn'), function(){ if(phase==='work'){ sinceCombo=0; nextItem(); } });
+    tap(document.getElementById('stopBtn'), function(){ clearInterval(timer); show(S.mode); });
+
+    // aprender
+    var cardNums=document.getElementById('cardNums'), cardText=document.getElementById('cardText'), cardEl=document.getElementById('card'),
+        learnCrumb=document.getElementById('learnCrumb'), learnCounter=document.getElementById('learnCounter'), dotsEl=document.getElementById('dots');
+    var learnPool=[],learnIdx=0,animating=false;
+    function startLearn(){ learnPool=buildPool(sel.level); learnIdx=0; learnCrumb.textContent=T('learn').replace(/^[^ ]+ /,'')+' · '+levelName(); renderCard(); show(S.learn); }
+    function renderDots(){ dotsEl.innerHTML=''; learnPool.forEach(function(_,i){ var d=document.createElement('span'); d.className='dot'+(i===learnIdx?' on':''); dotsEl.appendChild(d); }); }
+    function renderCard(){ renderInto(cardNums,cardText,learnPool[learnIdx]); learnCounter.textContent=(learnIdx+1)+' / '+learnPool.length; renderDots(); }
+    function goCard(dir){ if(animating||!learnPool.length)return; var n=learnIdx+dir; if(n<0)n=learnPool.length-1; if(n>=learnPool.length)n=0;
+      animating=true; cardEl.classList.add(dir>0?'swipe-left':'swipe-right');
+      setTimeout(function(){ learnIdx=n; renderCard(); cardEl.classList.remove('swipe-left','swipe-right'); cardEl.classList.add(dir>0?'swipe-right':'swipe-left');
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){ cardEl.classList.remove('swipe-left','swipe-right'); animating=false; }); }); },160); }
+    tap(document.getElementById('prevCardBtn'), function(){ goCard(-1); });
+    tap(document.getElementById('nextCardBtn'), function(){ goCard(+1); });
+    tap(document.getElementById('learnExitBtn'), function(){ show(S.mode); });
+    var dragX=null;
+    cardEl.addEventListener('touchstart', function(e){ dragX=e.touches[0].clientX; }, {passive:true});
+    cardEl.addEventListener('touchend', function(e){ if(dragX===null)return; var dx=e.changedTouches[0].clientX-dragX; dragX=null; if(Math.abs(dx)>40) goCard(dx<0?+1:-1); }, {passive:true});
+    cardEl.addEventListener('mousedown', function(e){ dragX=e.clientX; });
+    cardEl.addEventListener('mouseup', function(e){ if(dragX===null)return; var dx=e.clientX-dragX; dragX=null; if(Math.abs(dx)>40) goCard(dx<0?+1:-1); });
+
+    // navegação de telas
+    function show(scr){ Object.keys(S).forEach(function(k){ S[k].classList.remove('active'); }); scr.classList.add('active'); window.scrollTo(0,0); }
+    // teclado opcional (desktop)
+    document.addEventListener('keydown', function(e){
+      if(S.learn.classList.contains('active')){ if(e.key==='ArrowLeft'){goCard(-1);} if(e.key==='ArrowRight'){goCard(1);} }
+    });
+
+    applyLanguage(); renderConfig();
+  </script>
+</body>
+</html>
