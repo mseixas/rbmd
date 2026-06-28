@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, initial-scale=1.0">
+  <title>Red Dot</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    html, body {
+      width: 600px; height: 600px;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+
+    .screen {
+      position: absolute; top:0; left:0;
+      width: 600px; height: 600px;
+      display: none;
+    }
+    .screen.on {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── DESIGN SCREEN ──────────────────────────────────────── */
+    #s-design { padding: 18px 16px; gap: 12px; }
+
+    .scr-title {
+      font-size: 15px; font-weight: 600;
+      color: #555; text-transform: uppercase; letter-spacing: 2px;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px; width: 100%;
+    }
+
+    .r-opt {
+      min-height: 110px;
+      border: 2px solid #161616;
+      border-radius: 8px;
+      background: #080808;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 5px; padding: 6px 4px;
+      transition: border-color 0.1s, background 0.1s;
+    }
+    .r-opt.focused {
+      border-color: #e8e8e8;
+      background: #121212;
+    }
+    .r-opt canvas { display: block; }
+    .r-opt .rn {
+      font-size: 9px; color: #3a3a3a;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .r-opt.focused .rn { color: #888; }
+
+    /* ── COLOR SCREEN ───────────────────────────────────────── */
+    #s-color {
+      justify-content: center; gap: 30px; padding: 20px;
+    }
+    .c-row { display: flex; gap: 24px; }
+    .c-btn {
+      min-height: 130px; width: 240px;
+      border: 2px solid #161616; border-radius: 10px;
+      background: #080808;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      transition: border-color 0.1s, background 0.1s;
+    }
+    .c-btn.focused {
+      border-color: #e8e8e8;
+      background: #121212;
+    }
+    .c-dot { width: 36px; height: 36px; border-radius: 50%; }
+    .c-lbl { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+
+    /* ── ACTIVE SCREEN ──────────────────────────────────────── */
+    #s-active { background: #000; }
+    #s-active.on { display: block; }
+    #canvas { position: absolute; top:0; left:0; width:600px; height:600px; }
+  </style>
+</head>
+<body>
+
+<!-- TELA 1: escolha da mira -->
+<div id="s-design" class="screen on">
+  <div class="scr-title">Selecionar Mira</div>
+  <div id="grid"></div>
+</div>
+
+<!-- TELA 2: escolha da cor -->
+<div id="s-color" class="screen">
+  <div class="scr-title">Cor</div>
+  <div class="c-row">
+    <div class="c-btn focused" data-ci="0">
+      <div class="c-dot" style="background:#FF2200; box-shadow:0 0 14px #FF2200"></div>
+      <span class="c-lbl" style="color:#FF2200">Vermelho</span>
+    </div>
+    <div class="c-btn" data-ci="1">
+      <div class="c-dot" style="background:#00FF44; box-shadow:0 0 14px #00FF44"></div>
+      <span class="c-lbl" style="color:#00FF44">Verde</span>
+    </div>
+  </div>
+</div>
+
+<!-- TELA 3: mira ativa (fundo preto = transparente nos óculos) -->
+<div id="s-active" class="screen">
+  <canvas id="canvas" width="600" height="600"></canvas>
+</div>
+
+<script>
+// ── Reticles ─────────────────────────────────────────────────────────────────
+const TYPES = [
+  { id:'dot',       name:'Ponto'    },
+  { id:'ring',      name:'Anel'     },
+  { id:'crosshair', name:'Retículo' },
+  { id:'bullseye',  name:'Bullseye' },
+  { id:'cross',     name:'Cruz'     },
+  { id:'chevron',   name:'Chevron'  },
+  { id:'sq30',      name:'Área 30%' },
+  { id:'sq50',      name:'Área 50%' },
+];
+
+const COLORS = ['#FF2200', '#00FF44'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  scr:   'design',
+  di: 0, ci: 0,
+  type:  'dot',
+  color: '#FF2200',
+  rx: 300, ry: 300,
+};
+
+// ── Draw reticle ──────────────────────────────────────────────────────────────
+function drawReticle(ctx, type, cx, cy, color, pre) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle   = color;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.lineWidth   = pre ? 1.5 : 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur  = pre ? 4 : 14;
+
+  switch (type) {
+
+    case 'dot': {
+      ctx.beginPath();
+      ctx.arc(cx, cy, pre?6:7, 0, Math.PI*2);
+      ctx.fill();
+      break;
+    }
+
+    case 'ring': {
+      const r = pre ? 17 : 22;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, pre?2:3, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+
+    case 'crosshair': {
+      const arm = pre?17:26, gap = pre?4:7;
+      ctx.beginPath();
+      ctx.moveTo(cx-arm-gap, cy); ctx.lineTo(cx-gap, cy);
+      ctx.moveTo(cx+gap, cy);     ctx.lineTo(cx+arm+gap, cy);
+      ctx.moveTo(cx, cy-arm-gap); ctx.lineTo(cx, cy-gap);
+      ctx.moveTo(cx, cy+gap);     ctx.lineTo(cx, cy+arm+gap);
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, pre?2:2.5, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+
+    case 'bullseye': {
+      ctx.beginPath(); ctx.arc(cx, cy, pre?19:28, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, pre?9:13,  0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, pre?2:3,   0, Math.PI*2); ctx.fill();
+      break;
+    }
+
+    case 'cross': {
+      const arm = pre ? 17 : 26;
+      ctx.lineWidth = pre ? 3 : 4.5;
+      ctx.beginPath();
+      ctx.moveTo(cx-arm, cy); ctx.lineTo(cx+arm, cy);
+      ctx.moveTo(cx, cy-arm); ctx.lineTo(cx, cy+arm);
+      ctx.stroke();
+      break;
+    }
+
+    case 'chevron': {
+      // V descendo — ponta embaixo = ponto de mira
+      const hw = pre?18:26, hh = pre?11:17;
+      ctx.lineWidth = pre ? 1.5 : 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx-hw, cy-hh);
+      ctx.lineTo(cx, cy+hh);
+      ctx.lineTo(cx+hw, cy-hh);
+      ctx.stroke();
+      // ponto na ponta
+      ctx.beginPath(); ctx.arc(cx, cy+hh, pre?2:2.5, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+
+    case 'sq30': {
+      // 30% de 600px = 180px → metade = 90
+      const hw = pre ? 20 : 90;
+      ctx.lineWidth = pre ? 1.5 : 1.5;
+      ctx.strokeRect(cx-hw, cy-hw, hw*2, hw*2);
+      ctx.beginPath(); ctx.arc(cx, cy, pre?2:2, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+
+    case 'sq50': {
+      // 50% de 600px = 300px → metade = 150
+      const hw = pre ? 25 : 150;
+      ctx.lineWidth = pre ? 1.5 : 1.5;
+      ctx.strokeRect(cx-hw, cy-hw, hw*2, hw*2);
+      ctx.beginPath(); ctx.arc(cx, cy, pre?2:2, 0, Math.PI*2); ctx.fill();
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+// ── Build design grid ─────────────────────────────────────────────────────────
+function buildGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  TYPES.forEach((t, i) => {
+    const div = document.createElement('div');
+    div.className = 'r-opt' + (i === S.di ? ' focused' : '');
+    div.dataset.i = i;
+
+    const cvs = document.createElement('canvas');
+    cvs.width = 60; cvs.height = 60;
+    drawReticle(cvs.getContext('2d'), t.id, 30, 30, '#FF4422', true);
+
+    const nm = document.createElement('div');
+    nm.className = 'rn';
+    nm.textContent = t.name;
+
+    div.append(cvs, nm);
+    g.appendChild(div);
+  });
+}
+
+// ── Render active reticle ─────────────────────────────────────────────────────
+function render() {
+  const cvs = document.getElementById('canvas');
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0, 0, 600, 600);
+  drawReticle(ctx, S.type, S.rx, S.ry, S.color, false);
+}
+
+// ── Screen navigation ─────────────────────────────────────────────────────────
+function go(scr) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.getElementById('s-' + scr).classList.add('on');
+  S.scr = scr;
+  if (scr === 'active') { S.rx = 300; S.ry = 300; render(); }
+  if (scr === 'design') updD();
+  if (scr === 'color')  updC();
+}
+
+function updD() {
+  document.querySelectorAll('.r-opt').forEach((e, i) =>
+    e.classList.toggle('focused', i === S.di));
+}
+function updC() {
+  document.querySelectorAll('.c-btn').forEach((e, i) =>
+    e.classList.toggle('focused', i === S.ci));
+}
+
+// ── Movement limits ───────────────────────────────────────────────────────────
+function getLimits(type) {
+  // garante que a mira fique inteira na tela
+  const half = type === 'sq50' ? 152 : type === 'sq30' ? 92 : 32;
+  return { lo: half, hi: 600 - half };
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+const STEP = 8;
+
+document.addEventListener('keydown', e => {
+  e.preventDefault();
+
+  if (S.scr === 'design') {
+    const cols = 4, n = TYPES.length;
+    if (e.key === 'ArrowRight' && S.di % cols < cols-1) S.di++;
+    if (e.key === 'ArrowLeft'  && S.di % cols > 0)      S.di--;
+    if (e.key === 'ArrowDown'  && S.di + cols < n)      S.di += cols;
+    if (e.key === 'ArrowUp'    && S.di - cols >= 0)     S.di -= cols;
+    if (e.key === 'Enter') { S.type = TYPES[S.di].id; go('color'); return; }
+    updD();
+
+  } else if (S.scr === 'color') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') S.ci = 1;
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   S.ci = 0;
+    if (e.key === 'Enter') { S.color = COLORS[S.ci]; go('active'); return; }
+    updC();
+
+  } else if (S.scr === 'active') {
+    const { lo, hi } = getLimits(S.type);
+    if (e.key === 'ArrowRight') S.rx = Math.min(hi, S.rx + STEP);
+    if (e.key === 'ArrowLeft')  S.rx = Math.max(lo, S.rx - STEP);
+    if (e.key === 'ArrowDown')  S.ry = Math.min(hi, S.ry + STEP);
+    if (e.key === 'ArrowUp')    S.ry = Math.max(lo, S.ry - STEP);
+    if (e.key === 'Enter')      { go('design'); return; }
+    render();
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildGrid();
+</script>
+</body>
+</html>
