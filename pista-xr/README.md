@@ -273,21 +273,30 @@ Resíduo acima de 5 mm → refaça. O perfil fica salvo por arma.
 
 ### Começar: os comandos de Pista
 
-Apertar A/X não larga a passagem na hora. O app grita os **comandos do Árbitro**
+Apertar A/X não larga a passagem na hora. O app dá os **comandos do Árbitro**
 (art. 4.4.d/f) e só então arma o timer:
 
-> **A ESPERA!** → contagem randômica → **BIP**
+> **STAND BY!** → contagem randômica → **BIP**
 
-"A ESPERA" é o *stand by* da modalidade — é o último comando antes de o Árbitro
-apertar o timer. Em *Som e comandos* dá para trocar para a **sequência
-completa**, que é a de prova:
+O Tiro Defensivo da LNTD deriva do IDPA, então os comandos têm equivalente
+direto em três idiomas — e são os mesmos que se ouve em qualquer estande do
+mundo. Escolha em *Som e comandos*; **English é o padrão**, porque é o comando
+mais reconhecível e porque a voz `en-US` costuma estar instalada mesmo quando a
+`pt-BR` não está.
 
-> ÓCULOS E ABAFADOR! → PISTA QUENTE! → ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE
-> PRONTO! → O ATIRADOR ESTÁ PRONTO? → A ESPERA! → BIP
+| | Espera (curta) | Sequência completa |
+|---|---|---|
+| **English** | STAND BY! | EYES AND EARS! · RANGE IS HOT! · SHOOTER, IF YOU HAVE NO QUESTIONS, MAKE READY! · IS THE SHOOTER READY? · STAND BY! |
+| **Português** | A ESPERA! | ÓCULOS E ABAFADOR! · PISTA QUENTE! · ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE PRONTO! · O ATIRADOR ESTÁ PRONTO? · A ESPERA! |
+| **Español** | ¡ATENCIÓN! | ¡OJOS Y OÍDOS! · ¡PISTA CALIENTE! · TIRADOR, SI NO TIENE DUDAS, ¡PREPÁRESE! · ¿TIRADOR LISTO? · ¡ATENCIÓN! |
 
-Com a câmara iniciando municiada o terceiro comando vira **CARREGUE E FIQUE
-PRONTO**, como manda o art. 4.4.d. Os comandos são falados em pt-BR e
-**sempre** aparecem escritos no painel — se o áudio falhar, a passagem não para.
+Com a câmara iniciando municiada, o comando de preparação vira **LOAD AND MAKE
+READY** / **CARREGUE E FIQUE PRONTO** / **¡CARGUE Y PREPÁRESE!**, como manda o
+art. 4.4.d.
+
+Os comandos **sempre** aparecem escritos no painel. Se o aparelho não tiver voz
+instalada no idioma escolhido, a tela inicial avisa e a passagem segue igual —
+o comando sai escrito e com o tom curto.
 
 ### Som e vibração
 
@@ -298,8 +307,12 @@ vazia e o estalo do carregador.
 
 O controle vibra no disparo (forte e curto, o coice), no Bip, na recarga e no
 percussor em vazio. Usa `hapticActuators` do WebXR e cai para o
-`vibrationActuator` do Gamepad API. Sem hardware de vibração, o app segue igual:
-**nenhum sinal do app depende só de som ou de vibração**.
+`vibrationActuator` do Gamepad API.
+
+Em *Som e comandos* dá para ajustar idioma, sequência (curta ou completa),
+volume, e ligar/desligar som, voz e vibração de forma independente — mais dois
+botões para ouvir o estampido e a sequência antes de entrar. **Nenhum sinal do
+app depende só de som ou de vibração.**
 
 ### Passagem concluída devolve a munição
 

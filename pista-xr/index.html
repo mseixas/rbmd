@@ -479,6 +479,10 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
 }
 #mun-resumo { font-family: var(--mono, ui-monospace, monospace); }
 
+/* ===== Som e comandos ================================================== */
+#som-previa { font-family: var(--mono, ui-monospace, monospace); line-height: 1.7; }
+#in-volume { width: 100%; accent-color: var(--ciano, #00d4ff); }
+
 </style>
 </head>
 <body>
@@ -853,6 +857,53 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
       O app <b>não vê suas mãos</b>: ele não julga se você pegou o carregador pleno antes de tirar o
       incompleto. O que ele cobra é o que dá para medir &mdash; arma vazia não atira, a Recarga custa
       tempo, e Recarga exigida e não feita entre o primeiro e o último disparo é 1 EP (art. 3.8.6.i).
+    </p>
+  </section>
+
+  <!-- ===== 8c. SOM E COMANDOS ============================================ -->
+  <section class="cartao" id="cartao-som">
+    <h2 class="cartao__titulo"><span class="cartao__num">8c</span> Som e comandos</h2>
+    <p class="nota">
+      Apertar <b>A / X</b> não larga a passagem na hora: o app dá os comandos do Árbitro
+      (art. 4.4.d/f) e só então arma o timer. O último comando é o de espera, e depois vem
+      a contagem randômica e o <b>BIP</b>.
+    </p>
+
+    <div class="grade grade--imp">
+      <label class="campo">Idioma dos comandos
+        <select id="sel-idioma-comandos">
+          <option value="en">English</option>
+          <option value="pt">Português</option>
+          <option value="es">Español</option>
+        </select></label>
+      <label class="campo">Sequência
+        <select id="sel-sequencia">
+          <option value="curta">curta — só o comando de espera</option>
+          <option value="completa">completa — como na prova</option>
+        </select></label>
+      <label class="campo campo--estreito">Volume
+        <input type="range" id="in-volume" min="0" max="100" step="5" value="80"></label>
+    </div>
+
+    <label class="opcao"><input type="checkbox" id="chk-som" checked>
+      som (estampido, Bip, percussor em vazio, carregador)</label>
+    <label class="opcao"><input type="checkbox" id="chk-voz" checked>
+      voz dos comandos</label>
+    <label class="opcao"><input type="checkbox" id="chk-vibracao" checked>
+      vibração no controle (coice, Bip, recarga)</label>
+
+    <p id="som-previa" class="nota">&mdash;</p>
+
+    <div class="botoes">
+      <button type="button" id="btn-som-testar" class="botao">Ouvir o estampido</button>
+      <button type="button" id="btn-som-sequencia" class="botao">Ouvir a sequência</button>
+    </div>
+
+    <p class="nota">
+      Nenhum arquivo de áudio: tudo é sintetizado na hora, e o app continua sendo um
+      arquivo só. Os comandos <b>sempre</b> aparecem escritos no painel &mdash; se o aparelho
+      não tiver voz instalada no idioma, a passagem não para. O mesmo vale para a vibração:
+      nenhum sinal do app depende só de som ou de vibração.
     </p>
   </section>
 
@@ -7598,14 +7649,32 @@ const Som = {
     return true;
   },
 
-  /* Fala em pt-BR. É complemento: o texto SEMPRE aparece escrito no painel. */
-  falar(texto) {
+  /* A voz instalada mais próxima do idioma pedido. Sem voz do idioma, deixa o
+     navegador escolher — dizer o comando com sotaque errado é melhor do que
+     não dizer. */
+  vozPara(lang) {
+    try {
+      const vs = speechSynthesis.getVoices() || [];
+      if (!vs.length) return null;
+      const alvo = String(lang || 'en-US').toLowerCase();
+      const curto = alvo.split('-')[0];
+      return vs.filter(v => String(v.lang).toLowerCase() === alvo)[0] ||
+             vs.filter(v => String(v.lang).toLowerCase().indexOf(curto) === 0)[0] || null;
+    } catch (e) { return null; }
+  },
+
+  /* Fala o comando. É COMPLEMENTO: o texto sempre aparece escrito no painel,
+     então o app funciona igual num aparelho sem voz instalada. */
+  falar(texto, lang) {
     if (!Som.voz || !texto || typeof speechSynthesis === 'undefined' ||
         typeof SpeechSynthesisUtterance === 'undefined') return false;
     try {
       Som.ultimaFala = texto;
+      const idioma = lang || Som.IDIOMAS[Som.idiomaValido(Som.idioma)].voz;
       const u = new SpeechSynthesisUtterance(texto);
-      u.lang = 'pt-BR';
+      u.lang = idioma;
+      const v = Som.vozPara(idioma);
+      if (v) u.voice = v;
       u.rate = 1.05;
       u.volume = Math.min(1, Som.volume);
       speechSynthesis.speak(u);
@@ -7618,30 +7687,74 @@ const Som = {
   },
 
   /* ---- COMANDOS DE PISTA (art. 4.4.d/f) --------------------------------
-     A ordem em que o Árbitro grita. "A ESPERA!" é o último comando antes de
-     ele apertar o timer — é o "stand by" da modalidade. */
-  COMANDOS: {
-    curta: [
-      { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
-    ],
-    completa: [
-      { txt: 'ÓCULOS E ABAFADOR!', ms: 1500, fonte: 'art. 4.4.d' },
-      { txt: 'PISTA QUENTE!', ms: 1200, fonte: 'art. 4.4.d' },
-      { txt: 'ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE PRONTO!', ms: 3200, fonte: 'art. 4.4.d' },
-      { txt: 'O ATIRADOR ESTÁ PRONTO?', ms: 2200, fonte: 'art. 4.4.f' },
-      { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
-    ]
+     A ordem em que o Árbitro grita, terminando no comando de espera — o último
+     antes de ele apertar o timer.
+
+     O Tiro Defensivo da LNTD deriva do IDPA, então os comandos têm equivalente
+     direto em inglês e em espanhol, e são os mesmos que se ouve em qualquer
+     estande do mundo. Quem treina com vídeo de fora reconhece na hora — e a
+     voz do navegador costuma ter en-US instalado mesmo quando não tem pt-BR.
+     ------------------------------------------------------------------- */
+  IDIOMAS: {
+    pt: {
+      nome: 'Português', voz: 'pt-BR',
+      curta: [
+        { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
+      ],
+      completa: [
+        { txt: 'ÓCULOS E ABAFADOR!', ms: 1500, fonte: 'art. 4.4.d' },
+        { txt: 'PISTA QUENTE!', ms: 1200, fonte: 'art. 4.4.d' },
+        { txt: 'ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE PRONTO!', ms: 3200, fonte: 'art. 4.4.d',
+          municiada: 'ATIRADOR, SE NÃO TEM DÚVIDA, CARREGUE E FIQUE PRONTO!' },
+        { txt: 'O ATIRADOR ESTÁ PRONTO?', ms: 2200, fonte: 'art. 4.4.f' },
+        { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
+      ]
+    },
+    en: {
+      nome: 'English', voz: 'en-US',
+      curta: [
+        { txt: 'STAND BY!', ms: 900, fonte: 'art. 4.4.f' }
+      ],
+      completa: [
+        { txt: 'EYES AND EARS!', ms: 1500, fonte: 'art. 4.4.d' },
+        { txt: 'RANGE IS HOT!', ms: 1200, fonte: 'art. 4.4.d' },
+        { txt: 'SHOOTER, IF YOU HAVE NO QUESTIONS, MAKE READY!', ms: 3200, fonte: 'art. 4.4.d',
+          municiada: 'SHOOTER, IF YOU HAVE NO QUESTIONS, LOAD AND MAKE READY!' },
+        { txt: 'IS THE SHOOTER READY?', ms: 2200, fonte: 'art. 4.4.f' },
+        { txt: 'STAND BY!', ms: 900, fonte: 'art. 4.4.f' }
+      ]
+    },
+    es: {
+      nome: 'Español', voz: 'es-ES',
+      curta: [
+        { txt: '¡ATENCIÓN!', ms: 900, fonte: 'art. 4.4.f' }
+      ],
+      completa: [
+        { txt: '¡OJOS Y OÍDOS!', ms: 1500, fonte: 'art. 4.4.d' },
+        { txt: '¡PISTA CALIENTE!', ms: 1200, fonte: 'art. 4.4.d' },
+        { txt: 'TIRADOR, SI NO TIENE DUDAS, ¡PREPÁRESE!', ms: 3200, fonte: 'art. 4.4.d',
+          municiada: 'TIRADOR, SI NO TIENE DUDAS, ¡CARGUE Y PREPÁRESE!' },
+        { txt: '¿TIRADOR LISTO?', ms: 2200, fonte: 'art. 4.4.f' },
+        { txt: '¡ATENCIÓN!', ms: 900, fonte: 'art. 4.4.f' }
+      ]
+    }
   },
 
-  /* Com a câmara iniciando MUNICIADA o comando muda (art. 4.4.d). */
-  comandos(modo, camaraComMunicao) {
-    const lista = (Som.COMANDOS[modo] || Som.COMANDOS.curta).map(c => ({ txt: c.txt, ms: c.ms, fonte: c.fonte }));
-    if (camaraComMunicao) {
-      for (const c of lista) {
-        if (/FIQUE PRONTO/.test(c.txt)) c.txt = 'ATIRADOR, SE NÃO TEM DÚVIDA, CARREGUE E FIQUE PRONTO!';
-      }
-    }
-    return lista;
+  /* Inglês por padrão: é o comando que se ouve em qualquer estande, e a voz
+     en-US costuma estar instalada mesmo quando pt-BR não está. */
+  idioma: 'en',
+
+  idiomaValido(id) { return Som.IDIOMAS[id] ? id : 'en'; },
+
+  /* Com a câmara iniciando MUNICIADA o comando de preparação muda
+     (art. 4.4.d): "CARREGUE E FIQUE PRONTO" no lugar de "FIQUE PRONTO". */
+  comandos(modo, camaraComMunicao, idioma) {
+    const L = Som.IDIOMAS[Som.idiomaValido(idioma || Som.idioma)];
+    const base = (modo === 'completa') ? L.completa : L.curta;
+    return base.map(c => ({
+      txt: (camaraComMunicao && c.municiada) ? c.municiada : c.txt,
+      ms: c.ms, fonte: c.fonte, voz: L.voz
+    }));
   },
 
   /* Toca a sequência, avisando cada comando por `aoComando(txt, fonte)`, e
@@ -7653,7 +7766,7 @@ const Som = {
       if (i >= lista.length) { if (aoFim) aoFim(); return; }
       const c = lista[i++];
       if (aoComando) { try { aoComando(c.txt, c.fonte); } catch (e) { /* nada */ } }
-      Som.falar(c.txt);
+      Som.falar(c.txt, c.voz);
       Som.tom(880, 0.05, 'sine', 0.18);
       /* comando de duração zero segue na hora: não há razão para uma volta na
          fila de tarefas, e assim a sequência é testável sem relógio */
@@ -11445,7 +11558,17 @@ const XR = {
     const cfg = (XR.ctx && XR.ctx.cfg) || {};
     const mun = XR.corrida.municao;
     const camaraComMunicao = !!(mun && mun.naCamara);
-    const lista = Som.comandos(cfg.comandos === 'completa' ? 'completa' : 'curta', camaraComMunicao);
+    /* idioma e sequência vêm da tela inicial (§16.C) */
+    if (cfg.som) {
+      Som.idioma = Som.idiomaValido(cfg.som.idioma);
+      Som.ligado = cfg.som.som !== false;
+      Som.voz = cfg.som.voz !== false;
+      if (typeof cfg.som.volume === 'number') Som.volume = cfg.som.volume;
+      if (typeof Vibra !== 'undefined') Vibra.ligado = cfg.som.vibracao !== false;
+      if (Som.ganho) { try { Som.ganho.gain.value = Som.volume; } catch (e) { /* nada */ } }
+    }
+    const lista = Som.comandos(cfg.comandos === 'completa' ? 'completa' : 'curta',
+                               camaraComMunicao, Som.idioma);
 
     XR.modoPainel('corrida');
     XR.estado.comando = lista.length ? lista[0].txt : '';
@@ -13854,7 +13977,10 @@ const UI = {
       /* o laser é a mira do treino seco; sem ele não dá para saber onde o cano aponta */
       laser: UI.marcado('chk-laser'),
       /* art. 3.8.6 / 5.1.2 — munição e Recarga entram na passagem */
-      municao: (typeof ConfigMunicao !== 'undefined') ? ConfigMunicao.cfg() : undefined
+      municao: (typeof ConfigMunicao !== 'undefined') ? ConfigMunicao.cfg() : undefined,
+      /* art. 4.4.d/f — comandos de Pista antes do Bip */
+      comandos: (typeof ConfigSom !== 'undefined') ? ConfigSom.cfg().sequencia : 'curta',
+      som: (typeof ConfigSom !== 'undefined') ? ConfigSom.cfg() : undefined
     });
   }
 };
@@ -14405,6 +14531,93 @@ const ConfigMunicao = {
     e.className = 'nota' + (est.avisos.length ? ' nota--alerta' : '');
     e.textContent = partes.join(' · ') +
       (est.avisos.length ? ' — ' + est.avisos.map(a => a.txt).join(' ') : '');
+  }
+};
+
+/* ===========================================================================
+   §16.C — SOM E COMANDOS na tela inicial.
+   ======================================================================== */
+
+const ConfigSom = {
+  el(id) { return document.getElementById(id); },
+
+  iniciar() {
+    if (typeof document === 'undefined') return;
+    for (const id of ['sel-idioma-comandos', 'sel-sequencia', 'in-volume',
+                      'chk-som', 'chk-voz', 'chk-vibracao']) {
+      const e = ConfigSom.el(id);
+      if (e) e.addEventListener('change', () => ConfigSom.aplicar());
+      if (e && id === 'in-volume') e.addEventListener('input', () => ConfigSom.aplicar());
+    }
+    /* Ouvir exige gesto do usuário — e o clique no botão é o gesto. */
+    const bt = ConfigSom.el('btn-som-testar');
+    if (bt) bt.addEventListener('click', () => {
+      Som.iniciar(); ConfigSom.aplicar(); Som.disparo();
+    });
+    const bs = ConfigSom.el('btn-som-sequencia');
+    if (bs) bs.addEventListener('click', () => {
+      Som.iniciar(); ConfigSom.aplicar();
+      const cfg = ConfigSom.cfg();
+      if (ConfigSom.cancelar) ConfigSom.cancelar();
+      const prev = ConfigSom.el('som-previa');
+      ConfigSom.cancelar = Som.sequencia(
+        Som.comandos(cfg.sequencia, false, cfg.idioma),
+        (txt) => { if (prev) prev.textContent = '▸ ' + txt; },
+        () => { Som.bip(); if (prev) prev.textContent = '▸ BIP — passagem correndo.'; ConfigSom.cancelar = null;
+                setTimeout(() => ConfigSom.pintar(), 1800); });
+    });
+    /* `getVoices()` costuma vir VAZIO na primeira chamada e só se popular
+       depois; sem isto o aviso de "sem voz instalada" apareceria sempre, mesmo
+       em aparelho que tem a voz. */
+    try {
+      if (typeof speechSynthesis !== 'undefined' && speechSynthesis.addEventListener) {
+        speechSynthesis.addEventListener('voiceschanged', () => ConfigSom.pintar());
+      }
+    } catch (e) { /* navegador sem síntese de voz */ }
+    if (typeof setTimeout === 'function') setTimeout(() => ConfigSom.pintar(), 700);
+
+    ConfigSom.aplicar();
+  },
+
+  cfg() {
+    const val = (id, p) => { const e = ConfigSom.el(id); return e ? e.value : p; };
+    const mar = (id, p) => { const e = ConfigSom.el(id); return e ? !!e.checked : p; };
+    const n = parseFloat(val('in-volume', 80));
+    return {
+      idioma: Som.idiomaValido(val('sel-idioma-comandos', 'en')),
+      sequencia: val('sel-sequencia', 'curta') === 'completa' ? 'completa' : 'curta',
+      volume: (isFinite(n) ? n : 80) / 100,
+      som: mar('chk-som', true),
+      voz: mar('chk-voz', true),
+      vibracao: mar('chk-vibracao', true)
+    };
+  },
+
+  aplicar() {
+    if (typeof Som === 'undefined') return null;
+    const c = ConfigSom.cfg();
+    Som.idioma = c.idioma;
+    Som.ligado = c.som;
+    Som.voz = c.voz;
+    Som.volume = c.volume;
+    if (Som.ganho) { try { Som.ganho.gain.value = c.volume; } catch (e) { /* nada */ } }
+    if (typeof Vibra !== 'undefined') Vibra.ligado = c.vibracao;
+    ConfigSom.pintar();
+    return c;
+  },
+
+  pintar() {
+    const e = ConfigSom.el('som-previa');
+    if (!e || typeof Som === 'undefined') return;
+    const c = ConfigSom.cfg();
+    const lista = Som.comandos(c.sequencia, false, c.idioma).map(x => x.txt);
+    const L = Som.IDIOMAS[c.idioma];
+    const v = Som.vozPara(L.voz);
+    const partes = [lista.join('  →  ') + '  →  BIP'];
+    if (!c.voz) partes.push('voz desligada — os comandos só aparecem escritos no painel');
+    else if (!v) partes.push('sem voz ' + L.voz + ' instalada neste aparelho: o comando sai escrito e com o tom curto');
+    e.className = 'nota' + ((!c.voz || !v) ? ' nota--alerta' : '');
+    e.textContent = partes.join(' · ');
   }
 };
 
@@ -15878,6 +16091,7 @@ if (typeof window !== 'undefined') {
       /* O caminho de entrada do mês: a Ficha chega como PNG. */
       Importador.iniciar();
       ConfigMunicao.iniciar();
+      ConfigSom.iniciar();
     } catch (e) {
       const alvo = document.getElementById('saida') || document.body;
       const p = document.createElement('pre');
