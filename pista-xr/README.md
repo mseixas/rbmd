@@ -298,6 +298,28 @@ Os comandos **sempre** aparecem escritos no painel. Se o aparelho não tiver voz
 instalada no idioma escolhido, a tela inicial avisa e a passagem segue igual —
 o comando sai escrito e com o tom curto.
 
+### Na hora do comando, o painel sai da frente
+
+O comando toma o **painel inteiro** — STAND BY, MAKE READY, o que for — com o
+texto no maior corpo que couber, quebrando em linhas sozinho. Tempo, lista de
+disparos e barra de TPD somem: é o único momento em que o Atleta não deve estar
+lendo número nenhum.
+
+Quando o **BIP** soa, o painel **encolhe e fica translúcido**, para você ver os
+Alvos e não a tela. Ao encerrar, ele volta ao tamanho cheio — que é quando o
+relatório importa.
+
+### Ambiente: realidade mista ou fechado
+
+| Modo | O que é |
+|---|---|
+| **Realidade mista** *(padrão)* | `immersive-ar` com passthrough: a Pista aparece dentro do seu cômodo |
+| **Fechado** | `immersive-vr` puro: fundo escuro, chão de referência, sem a imagem da câmera |
+
+O fechado tira a distração do cômodo e cansa menos em treino longo. Em
+compensação **você deixa de ver onde está pisando** — mantenha a área
+desimpedida. Se o aparelho não suportar VR, o app avisa e abre com passthrough.
+
 ### Som e vibração
 
 Nenhum arquivo de áudio: o app é um arquivo só. Tudo é sintetizado na hora com
@@ -308,6 +330,12 @@ vazia e o estalo do carregador.
 O controle vibra no disparo (forte e curto, o coice), no Bip, na recarga e no
 percussor em vazio. Usa `hapticActuators` do WebXR e cai para o
 `vibrationActuator` do Gamepad API.
+
+**O áudio nasce no clique que abre a sessão**, na página — não no botão do
+controle. Apertar A/X dentro da sessão imersiva **não conta como gesto de
+usuário** para o navegador, e era por isso que o comando saía mudo. No mesmo
+clique a síntese de voz é destravada com uma fala em volume zero, e o
+`AudioContext` é reacordado quando a sessão muda de visibilidade.
 
 Em *Som e comandos* dá para ajustar idioma, sequência (curta ou completa),
 volume, e ligar/desligar som, voz e vibração de forma independente — mais dois
