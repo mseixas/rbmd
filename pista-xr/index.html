@@ -796,6 +796,15 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
       <label class="campo"><span>Perfil de cano</span>
         <select id="sel-perfil"></select></label>
     </div>
+    <label class="opcao"><input type="checkbox" id="chk-laser" checked>
+      mostrar o laser de mira do controle</label>
+    <p class="nota">
+      O padrão é o <b>raio natural do controle</b>: o Quest já entrega um raio de mira
+      calibrado pelo fabricante, e a posição natural do Touch na mão é praticamente a de
+      uma arma. Os perfis de <i>pistola</i> e <i>arma longa</i> corrigem o eixo do cabo na
+      mão, para quem preferir. A calibração por pivô duplo mede o cano da sua arma de
+      verdade e é a única exata.
+    </p>
     <div class="botoes">
       <button type="button" id="btn-perfil-sintetico" class="botao">Usar perfil sintético</button>
       <button type="button" id="btn-perfil-remover" class="botao botao--perigo">Apagar perfil escolhido</button>
@@ -3991,8 +4000,16 @@ const Cano = {
   },
 
   PRESETS: {
+    /* O WebXR já entrega um raio de mira calibrado pelo fabricante: o
+       `targetRaySpace`. No Quest ele nasce da forma como a mão fecha no Touch —
+       que é praticamente a empunhadura de uma arma. Usar ele é melhor do que
+       corrigir o `gripSpace` no chute, porque a Meta mediu isso no hardware e o
+       app não tem como medir. É o padrão. */
+    natural: { nome: 'Natural do controle', espaco: 'targetRay', inclinacao: 0,
+               origem: { x: 0, y: 0, z: 0 },
+               dica: 'o raio de mira do próprio Quest — a posição natural do Touch já é quase a de uma arma' },
     pistola: { nome: 'Pistola', inclinacao: -50, origem: { x: 0, y: -0.02, z: -0.06 },
-               dica: 'empunhadura de pistola: cano à frente, seguindo o ângulo natural do punho' },
+               dica: 'corrige o eixo do cabo do controle: cano à frente, 50° abaixo' },
     longa:   { nome: 'Arma longa', inclinacao: -25, origem: { x: 0, y: -0.02, z: -0.14 },
                dica: 'carabina/fuzil: cano mais alinhado com o antebraço e mais à frente' },
     cabo:    { nome: 'Eixo do cabo (cru)', inclinacao: 0, origem: { x: 0, y: 0, z: -0.10 },
@@ -4002,11 +4019,14 @@ const Cano = {
   /* Monta um perfil a partir de um preset, com inclinação opcionalmente
      ajustada pelo Atleta dentro dos óculos. */
   perfilDePreset(nome, inclinacao) {
-    const p = Cano.PRESETS[nome] || Cano.PRESETS.pistola;
+    const chave = Cano.PRESETS[nome] ? nome : 'natural';
+    const p = Cano.PRESETS[chave];
     const ang = Cano.ehNum(inclinacao) ? inclinacao : p.inclinacao;
     return {
-      nome: p.nome + ' (' + ang.toFixed(0) + '°)',
-      preset: (Cano.PRESETS[nome] ? nome : 'pistola'),
+      nome: p.espaco === 'targetRay' ? p.nome : (p.nome + ' (' + ang.toFixed(0) + '°)'),
+      preset: chave,
+      /* 'targetRay' = raio de mira do WebXR; 'grip' = eixo do cabo do controle */
+      espaco: p.espaco || 'grip',
       inclinacao: ang,
       origem: { x: p.origem.x, y: p.origem.y, z: p.origem.z },
       direcao: Cano.direcaoDeInclinacao(ang),
@@ -4014,9 +4034,23 @@ const Cano = {
     };
   },
 
+  /* Padrão: o raio de mira do próprio Quest, sem correção nenhuma. */
   PERFIL_SINTETICO: {
+    nome: 'Natural do controle',
+    preset: 'natural',
+    espaco: 'targetRay',
+    inclinacao: 0,
+    origem: { x: 0, y: 0, z: 0 },
+    direcao: { x: 0, y: 0, z: -1 },
+    residuo: 0,
+    sintetico: true
+  },
+
+  /* Perfil alternativo, para quem preferir corrigir o eixo do cabo na mão. */
+  PERFIL_PISTOLA: {
     nome: 'Pistola (−50°)',
     preset: 'pistola',
+    espaco: 'grip',
     inclinacao: -50,
     origem: { x: 0, y: -0.02, z: -0.06 },
     /* (0, sen(−50°), −cos(−50°)) */
@@ -10552,7 +10586,7 @@ const XR = {
     k: 1, escala: 'real',
     medida: null,
     postoIdx: 0, postoCorrente: null,
-    tracado: false, calibrando: null,
+    tracado: true, calibrando: null,
     origem: { x: 0, y: 0, z: 0 },
     giro: { x: 0, y: 0, z: 0, w: 1 },
     giroInv: { x: 0, y: 0, z: 0, w: 1 },
@@ -11042,7 +11076,17 @@ const XR = {
         if (pega(XR.BOTAO.grip)) e.botao.grip = true;
         if (pega(XR.BOTAO.manche)) e.botao.manche = true;
       }
-      const espaco = src.gripSpace || src.targetRaySpace;
+      /* O perfil decide de qual espaço nasce o raio do cano:
+         - 'targetRay' (padrão): o RAIO DE MIRA do próprio WebXR. No Quest ele
+           já sai calibrado pela forma como a mão fecha no Touch — que é
+           praticamente a empunhadura de uma arma. Não precisa de correção.
+         - 'grip': o eixo do CABO do controle, que aponta para cima e exige a
+           inclinação do perfil (§7) para virar cano. */
+      const perfilAtivo = XR.perfilDeCano();
+      const querMira = !perfilAtivo || perfilAtivo.espaco !== 'grip';
+      const espaco = querMira
+        ? (src.targetRaySpace || src.gripSpace)
+        : (src.gripSpace || src.targetRaySpace);
       if (!espaco) continue;
       if (src.handedness === maoTiro) escolhida = { src, espaco };
       else if (!reserva) reserva = { src, espaco };
@@ -11063,6 +11107,14 @@ const XR = {
       if (bt) e.gatilho = XR.num(bt.value, bt.pressed ? 1 : 0);
     }
     return e;
+  },
+
+  /* O perfil de cano em vigor. Um lugar só, para a leitura da entrada e o
+     laser nunca discordarem sobre de onde o raio nasce. */
+  perfilDeCano() {
+    return (XR.ctx && XR.ctx.cfg && XR.ctx.cfg.perfilCano) ||
+           XR.estado.perfilCano ||
+           ((typeof Cano !== 'undefined') ? Cano.PERFIL_SINTETICO : null);
   },
 
   /* Detecção de borda dos botões: só o instante da PRESSÃO comanda. */
@@ -11335,8 +11387,7 @@ const XR = {
                         Math.abs(e.medida.livre.profundidade - md.livre.profundidade) > 0.05;
           e.medida = md;
           if (mudou) {
-            XR.etiqueta && XR.etiqueta.atualizar();
-            if (XR.ctx && typeof XR.ctx.aoMedir === 'function') {
+                  if (XR.ctx && typeof XR.ctx.aoMedir === 'function') {
               try { XR.ctx.aoMedir(md); } catch (er) { /* nada */ }
             }
             if (md.fonte !== 'digitado') XR.aviso(md.txt);
@@ -11419,7 +11470,7 @@ const XR = {
 
     /* 6. traçado do cano */
     if (e.tracado && XR.tracadoObj && ent.temCano) {
-      const perfil = (XR.ctx && XR.ctx.cfg && XR.ctx.cfg.perfilCano) || e.perfilCano || Cano.PERFIL_SINTETICO;
+      const perfil = XR.perfilDeCano();
       const raioMundo = Cano.raio(ent.cano.pos, ent.cano.quat, perfil);
       let batida = null;
       if (XR.ctx && XR.ctx.pista) {
@@ -11563,7 +11614,9 @@ const XR = {
     XR.estado.k = XR.num(c.pista.k, 1);
     XR.estado.modo = modo;
     XR.estado.medida = null;
-    XR.estado.tracado = false;
+    /* O laser é a MIRA do treino seco: sem ele não dá para saber para onde o
+       cano aponta. Fica ligado por padrão; a tela inicial permite desligar. */
+    XR.estado.tracado = (cfg && cfg.laser === false) ? false : true;
     XR.estado.destacado = null;
     XR.estado.postoIdx = 0;
     XR.estado.origem = { x: 0, y: 0, z: 0 };
@@ -11597,11 +11650,14 @@ const XR = {
       }
     } catch (e) { XR.painel = null; XR.aviso('Painel indisponível: ' + e, 'erro'); }
 
-    /* etiqueta de escala — filha da câmera, sempre à vista */
-    XR.etiqueta = XR.criarEtiqueta(THREE);
-    XR.camera.add(XR.etiqueta.objeto);
+    /* A etiqueta flutuante de escala saiu: ficava boiando ao lado do campo de
+       visão sem ajudar em nada. O `k` e o modo de escala continuam SEMPRE à
+       vista — agora na barra de baixo do painel (§18), que é onde o Atleta já
+       olha. A exigência do PLANO ("nunca esconda que houve escala") segue
+       cumprida, só que sem lixo visual. */
+    XR.etiqueta = null;
 
-    /* traçado do cano — desligado por padrão */
+    /* laser de mira do cano — LIGADO por padrão */
     XR.tracadoObj = XR.criarTracado(THREE);
     XR.cena.add(XR.tracadoObj.objeto);
 
@@ -11693,7 +11749,6 @@ const XR = {
     XR.tUltimo = 0; XR.tPainel = 0; XR.tAbertura = XR.agora();
     XR.modoPainel('mensagem');
     XR.aviso(sup.msg + ' ' + XR.textoDeAbertura());
-    XR.etiqueta.atualizar();
 
     XR.renderizador.setAnimationLoop((tempo, frame) => XR.quadro(tempo, frame));
 
@@ -12834,6 +12889,7 @@ const UI = {
   perfilEscolhido() {
     const v = UI.str('sel-perfil', UI.PERFIL_NENHUM);
     if (v === UI.PERFIL_NENHUM) return Cano.PERFIL_SINTETICO;
+    if (v.indexOf('preset:') === 0) return Cano.perfilDePreset(v.slice(7));
     const p = UI.perfisDisponiveis().filter(x => x.nome === v)[0];
     return p || Cano.PERFIL_SINTETICO;
   },
@@ -12843,14 +12899,20 @@ const UI = {
     const antes = sel ? sel.value : '';
     const salvos = UI.perfisDisponiveis();
     if (sel) {
-      const html = ['<option value="' + UI.PERFIL_NENHUM + '">sintético — controle na mão (sem calibração)</option>'];
+      const html = ['<option value="' + UI.PERFIL_NENHUM + '">natural do controle (padrão, sem calibração)</option>'];
+      for (const chave of ['pistola', 'longa', 'cabo']) {
+        const pr = Cano.PRESETS[chave];
+        if (pr) html.push('<option value="preset:' + chave + '">' + UI.escapar(pr.nome) +
+          (pr.inclinacao ? (' — eixo do cabo ' + pr.inclinacao + '°') : '') + '</option>');
+      }
       for (const p of salvos) {
         html.push('<option value="' + UI.escapar(p.nome) + '">' + UI.escapar(p.nome) +
           ' — resíduo ' + UI.n((p.residuo || 0) * 1000, 1) + ' mm' +
           (p.calibre ? (' · ' + UI.escapar(p.calibre)) : '') + '</option>');
       }
       sel.innerHTML = html.join('');
-      sel.value = (antes && salvos.some(p => p.nome === antes)) ? antes : UI.PERFIL_NENHUM;
+      const valido = antes && (antes.indexOf('preset:') === 0 || salvos.some(p => p.nome === antes));
+      sel.value = valido ? antes : UI.PERFIL_NENHUM;
     }
 
     const rodando = !!(XR && XR.estado && XR.estado.rodando);
@@ -13409,6 +13471,8 @@ const UI = {
       preferirRetanguloTarja: UI.str('sel-tarja', 'cobre') === 'retangulo',
       deteccao: UI.str('sel-deteccao', CFG_PADRAO.deteccao),
       perfilCano: UI.perfilEscolhido(),
+      /* o laser é a mira do treino seco; sem ele não dá para saber onde o cano aponta */
+      laser: UI.marcado('chk-laser'),
       /* art. 3.8.6 / 5.1.2 — munição e Recarga entram na passagem */
       municao: (typeof ConfigMunicao !== 'undefined') ? ConfigMunicao.cfg() : undefined
     });

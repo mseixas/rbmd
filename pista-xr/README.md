@@ -270,16 +270,27 @@ Resíduo acima de 5 mm → refaça. O perfil fica salvo por arma.
 | **Manche** (clique) | **RECENTRAR** a Pista à sua frente |
 
 Essa mesma barra fica fixa no **rodapé do painel**, dentro dos óculos. Ninguém
-lembra qual botão faz o quê com o headset na cabeça.
+lembra qual botão faz o quê com o headset na cabeça. A barra também carrega o
+contador de munição, o modo de escala e o `k`.
+
+Não há mais etiqueta flutuante de escala ao lado do campo de visão: ela ficava
+boiando sem ajudar. O `k` continua sempre à vista, agora na barra — que é onde
+você já olha.
 
 ### A mira do controle
 
-O `gripSpace` do WebXR tem o −Z ao longo do **cabo** do controle, saindo pelo
-topo. Usado cru, o cano aponta de baixo para cima, como uma lanterna. O Touch do
-Quest já tem punho e gatilho: empunhado como pistola, o cano sai **à frente**,
-uns **50° abaixo** do eixo do cabo. É esse o perfil padrão (`Pistola −50°`), e o
-ângulo é ajustável — cada mão empunha de um jeito. Há também um preset de
-**arma longa** (−25°) e o **eixo cru do cabo** (0°), para referência.
+O **laser de mira fica ligado por padrão** — sem ele não dá para saber para onde
+o cano aponta. Dá para desligar na tela inicial.
+
+O padrão é o **raio natural do controle**: o WebXR entrega um `targetRaySpace`
+já calibrado pelo fabricante, e a posição natural do Touch na mão é praticamente
+a de uma arma. Isso é melhor do que corrigir ângulo no chute, porque a Meta mediu
+no hardware e o app não tem como medir.
+
+Os outros perfis corrigem o **eixo do cabo** (`gripSpace`), cujo −Z aponta para
+cima, saindo pelo topo do controle: **Pistola** (−50°), **arma longa** (−25°) e
+o **eixo cru** (0°), para referência. A calibração por pivô duplo mede o cano da
+sua arma de verdade e é a única exata.
 
 ### Munição e Recarga *(art. 3.8.6 e 5.1.2)*
 
