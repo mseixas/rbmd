@@ -6513,6 +6513,19 @@ const Corrida = {
     return c.atrasoMs;
   },
 
+  /* Passagem concluída → munição e carregadores de volta ao estado da Ficha.
+     Só depois de `c.resultado` estar pronto: a apuração precisa do estado
+     REAL para julgar a Recarga exigida (art. 3.8.6.g/h/i). */
+  restaurarMunicao(corrida) {
+    const c = corrida;
+    if (!c || !c.municao || typeof Municao === 'undefined') return null;
+    c.municaoDaPassagem = c.municao;
+    c.municao = Municao.restaurar(c.municao, c.pista);
+    Corrida.registrarEvento(c, Corrida.num(c.tFim, 0), 'municao',
+      'Passagem concluída: munição e carregadores restaurados.');
+    return c.municao;
+  },
+
   /* Cancela um timer armado sem dar o Bip (o Árbitro suspendeu a passagem). */
   cancelar(corrida) {
     const c = corrida;
@@ -7089,6 +7102,10 @@ const Corrida = {
     try { c.metricas = Metricas.calcular(c, p); } catch (e) { c.metricas = null; }
     try { c.trechos = Metricas.segmentar(c, p); } catch (e) { c.trechos = []; }
 
+    /* 5º Passagem concluída → munição e carregadores de volta ao estado da
+       Ficha. Depois da apuração, nunca antes: ela precisa do estado real. */
+    Corrida.restaurarMunicao(c);
+
     /* O cache ao vivo passa a refletir o resultado final. */
     Corrida.recalcularAoVivo(c);
     Corrida.avisar(c, 'aoTerminar');
@@ -7251,6 +7268,7 @@ const Municao = {
       naArma: null, naCamara: false, ferrolhoAberto: false,
       recargaEmCurso: null, disparos: 0, tentativasVazio: 0
     };
+    e.sobressalentesIniciais = spare;
     for (let i = 0; i < spare; i++) e.cinto.push(cap);
 
     if (e.condicaoInicial === 'semCarregador') {
@@ -7403,6 +7421,22 @@ const Municao = {
     };
   },
 
+  /* Passagem concluída: o Atleta recolhe os carregadores, remunicia e volta ao
+     estado inicial da Ficha, pronto para a próxima passada. Devolve um estado
+     NOVO, sem tocar no antigo — o resultado já apurado guarda o que foi gasto,
+     e o relatório continua fiel ao que aconteceu. */
+  restaurar(e, pista) {
+    if (!e) return e;
+    return Municao.criar({
+      ativo: e.ativo,
+      capacidade: e.capacidade,
+      arma: e.arma,
+      sobressalentes: e.sobressalentesIniciais,
+      condicaoInicial: e.condicaoInicial,
+      recargaExigida: e.recargaExigida
+    }, pista);
+  },
+
   /* Texto curto de instrução, para a barra de controles. */
   instrucao(e) {
     if (!e || !e.ativo) return '';
@@ -7415,6 +7449,263 @@ const Municao = {
     if (!e.naCamara) return 'ARMA VAZIA — segure o APERTO para a Recarga de Emergência';
     return '';
   }
+};
+
+
+/* ========================= 19-som.js ========================= */
+/* ===========================================================================
+   §19. SOM E VIBRAÇÃO — os comandos de Pista, o estampido e o coice
+
+   Nada de arquivo de áudio: o app é UM arquivo só, sem rede. Todo som é
+   SINTETIZADO na hora com Web Audio. O estampido é ruído branco filtrado com
+   decaimento rápido mais um golpe grave; o Bip é o do timer de prova.
+
+   Os comandos são os do Regulamento (art. 4.4.d/f), na ordem em que o Árbitro
+   grita, terminando em "A ESPERA!" — que é o "stand by" da modalidade — e no
+   BIP do timer depois da contagem randômica.
+
+   Honestidade técnica: o áudio do navegador do Quest depende de permissão e de
+   um gesto do usuário. O gesto é o próprio A/X que arma a passagem. Se o som
+   falhar, a passagem NÃO para: os comandos continuam aparecendo escritos no
+   painel e a vibração continua no controle. Nenhum sinal do app depende só do
+   áudio.
+   ======================================================================== */
+
+const Som = {
+
+  ctx: null,
+  ganho: null,
+  volume: 0.8,
+  ligado: true,
+  voz: true,
+  ultimaFala: '',
+
+  /* Só pode nascer dentro de um gesto do usuário (art. do navegador, não do
+     Regulamento). Chamado pelo A/X que arma a passagem. */
+  iniciar() {
+    if (Som.ctx) {
+      if (Som.ctx.state === 'suspended') { try { Som.ctx.resume(); } catch (e) { /* nada */ } }
+      return Som.ctx;
+    }
+    try {
+      const AC = (typeof AudioContext !== 'undefined') ? AudioContext
+               : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+      if (!AC) return null;
+      Som.ctx = new AC();
+      Som.ganho = Som.ctx.createGain();
+      Som.ganho.gain.value = Som.volume;
+      Som.ganho.connect(Som.ctx.destination);
+    } catch (e) { Som.ctx = null; }
+    return Som.ctx;
+  },
+
+  pronto() { return !!(Som.ligado && Som.ctx && Som.ganho && Som.ctx.state !== 'closed'); },
+
+  /* Ruído branco de `dur` segundos, gerado uma vez e reaproveitado. */
+  _ruido(dur) {
+    const ctx = Som.ctx;
+    const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  },
+
+  /* ---- ESTAMPIDO -------------------------------------------------------
+     Três camadas: o estalo (ruído agudo, 4 ms de ataque, decaimento de 90 ms),
+     o corpo (ruído passa-baixa) e o golpe grave (seno de 70 Hz caindo).
+     É o suficiente para o ouvido reconhecer como tiro sem soar sintético. */
+  disparo(intensidade) {
+    if (!Som.pronto()) return false;
+    const ctx = Som.ctx, t = ctx.currentTime;
+    const i = Math.max(0.1, Math.min(1.5, intensidade == null ? 1 : intensidade));
+
+    const fonte = ctx.createBufferSource();
+    fonte.buffer = Som._ruido(0.22);
+
+    const agudo = ctx.createBiquadFilter();
+    agudo.type = 'highpass'; agudo.frequency.value = 900;
+
+    const corpo = ctx.createBiquadFilter();
+    corpo.type = 'lowpass';
+    corpo.frequency.setValueAtTime(6500, t);
+    corpo.frequency.exponentialRampToValueAtTime(700, t + 0.10);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.9 * i, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+
+    fonte.connect(agudo); agudo.connect(corpo); corpo.connect(env); env.connect(Som.ganho);
+    fonte.start(t); fonte.stop(t + 0.22);
+
+    const grave = ctx.createOscillator();
+    grave.type = 'sine';
+    grave.frequency.setValueAtTime(140, t);
+    grave.frequency.exponentialRampToValueAtTime(45, t + 0.09);
+    const gGrave = ctx.createGain();
+    gGrave.gain.setValueAtTime(0.0001, t);
+    gGrave.gain.exponentialRampToValueAtTime(0.55 * i, t + 0.006);
+    gGrave.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    grave.connect(gGrave); gGrave.connect(Som.ganho);
+    grave.start(t); grave.stop(t + 0.14);
+    return true;
+  },
+
+  /* Tom puro reaproveitado pelo Bip e pelos cliques. */
+  tom(freq, dur, tipo, volume, atraso) {
+    if (!Som.pronto()) return false;
+    const ctx = Som.ctx, t = ctx.currentTime + (atraso || 0);
+    const o = ctx.createOscillator();
+    o.type = tipo || 'square';
+    o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.02, volume == null ? 0.5 : volume), t + 0.008);
+    g.gain.setValueAtTime(Math.max(0.02, volume == null ? 0.5 : volume), t + dur - 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(Som.ganho);
+    o.start(t); o.stop(t + dur + 0.02);
+    return true;
+  },
+
+  /* O BIP do timer: o que abre a passagem (art. 3.2). Agudo e curto, para o
+     ouvido cravar o instante — é dele que sai o TPD. */
+  bip() { return Som.tom(2400, 0.32, 'square', 0.6); },
+
+  /* Percussor em câmara vazia: o clique seco que o Atleta ouve quando esqueceu
+     de remuniciar (art. 3.8.6). */
+  seco() {
+    if (!Som.pronto()) return false;
+    const ctx = Som.ctx, t = ctx.currentTime;
+    const f = ctx.createBufferSource();
+    f.buffer = Som._ruido(0.04);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'bandpass'; hp.frequency.value = 2600; hp.Q.value = 1.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.35, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    f.connect(hp); hp.connect(g); g.connect(Som.ganho);
+    f.start(t); f.stop(t + 0.05);
+    return true;
+  },
+
+  /* Carregador entrando e ferrolho voltando: dois estalos graves. */
+  recarga(tipo) {
+    Som.tom(320, 0.05, 'square', 0.22);
+    Som.tom(tipo === 'tatica' ? 520 : 240, 0.06, 'square', 0.26, 0.10);
+    return true;
+  },
+
+  /* Fala em pt-BR. É complemento: o texto SEMPRE aparece escrito no painel. */
+  falar(texto) {
+    if (!Som.voz || !texto || typeof speechSynthesis === 'undefined' ||
+        typeof SpeechSynthesisUtterance === 'undefined') return false;
+    try {
+      Som.ultimaFala = texto;
+      const u = new SpeechSynthesisUtterance(texto);
+      u.lang = 'pt-BR';
+      u.rate = 1.05;
+      u.volume = Math.min(1, Som.volume);
+      speechSynthesis.speak(u);
+      return true;
+    } catch (e) { return false; }
+  },
+
+  calar() {
+    try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch (e) { /* nada */ }
+  },
+
+  /* ---- COMANDOS DE PISTA (art. 4.4.d/f) --------------------------------
+     A ordem em que o Árbitro grita. "A ESPERA!" é o último comando antes de
+     ele apertar o timer — é o "stand by" da modalidade. */
+  COMANDOS: {
+    curta: [
+      { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
+    ],
+    completa: [
+      { txt: 'ÓCULOS E ABAFADOR!', ms: 1500, fonte: 'art. 4.4.d' },
+      { txt: 'PISTA QUENTE!', ms: 1200, fonte: 'art. 4.4.d' },
+      { txt: 'ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE PRONTO!', ms: 3200, fonte: 'art. 4.4.d' },
+      { txt: 'O ATIRADOR ESTÁ PRONTO?', ms: 2200, fonte: 'art. 4.4.f' },
+      { txt: 'A ESPERA!', ms: 900, fonte: 'art. 4.4.f' }
+    ]
+  },
+
+  /* Com a câmara iniciando MUNICIADA o comando muda (art. 4.4.d). */
+  comandos(modo, camaraComMunicao) {
+    const lista = (Som.COMANDOS[modo] || Som.COMANDOS.curta).map(c => ({ txt: c.txt, ms: c.ms, fonte: c.fonte }));
+    if (camaraComMunicao) {
+      for (const c of lista) {
+        if (/FIQUE PRONTO/.test(c.txt)) c.txt = 'ATIRADOR, SE NÃO TEM DÚVIDA, CARREGUE E FIQUE PRONTO!';
+      }
+    }
+    return lista;
+  },
+
+  /* Toca a sequência, avisando cada comando por `aoComando(txt, fonte)`, e
+     chama `aoFim()` quando o último terminar. Devolve um cancelador. */
+  sequencia(lista, aoComando, aoFim) {
+    let i = 0, timer = null, cancelado = false;
+    const passo = () => {
+      if (cancelado) return;
+      if (i >= lista.length) { if (aoFim) aoFim(); return; }
+      const c = lista[i++];
+      if (aoComando) { try { aoComando(c.txt, c.fonte); } catch (e) { /* nada */ } }
+      Som.falar(c.txt);
+      Som.tom(880, 0.05, 'sine', 0.18);
+      /* comando de duração zero segue na hora: não há razão para uma volta na
+         fila de tarefas, e assim a sequência é testável sem relógio */
+      if (c.ms > 0 && typeof setTimeout === 'function') timer = setTimeout(passo, c.ms);
+      else passo();
+    };
+    passo();
+    return () => {
+      cancelado = true;
+      if (timer && typeof clearTimeout === 'function') clearTimeout(timer);
+      Som.calar();
+    };
+  }
+};
+
+/* ===========================================================================
+   Vibração do controle. `hapticActuators` é o caminho do WebXR; o
+   `vibrationActuator` do Gamepad API é a reserva. Se nenhum existir, o app
+   segue igual — vibração é tempero, não sinal.
+   ======================================================================== */
+
+const Vibra = {
+  ligado: true,
+
+  /* intensidade 0..1, duração em ms */
+  pulso(fonteEntrada, intensidade, ms) {
+    if (!Vibra.ligado || !fonteEntrada) return false;
+    const gp = fonteEntrada.gamepad || fonteEntrada;
+    const i = Math.max(0, Math.min(1, intensidade == null ? 0.6 : intensidade));
+    const d = Math.max(10, Math.min(1000, ms == null ? 60 : ms));
+    try {
+      const at = gp && gp.hapticActuators && gp.hapticActuators[0];
+      if (at && typeof at.pulse === 'function') { at.pulse(i, d); return true; }
+    } catch (e) { /* segue para a reserva */ }
+    try {
+      const va = gp && gp.vibrationActuator;
+      if (va && typeof va.playEffect === 'function') {
+        va.playEffect('dual-rumble', { duration: d, strongMagnitude: i, weakMagnitude: i * 0.6 });
+        return true;
+      }
+    } catch (e) { /* sem vibração neste aparelho */ }
+    return false;
+  },
+
+  /* O coice: forte e curto. */
+  disparo(fonte) { return Vibra.pulso(fonte, 0.85, 70); },
+  /* Percussor em vazio: fraco e seco. */
+  seco(fonte) { return Vibra.pulso(fonte, 0.25, 35); },
+  /* Carregador travando. */
+  recarga(fonte) { return Vibra.pulso(fonte, 0.5, 90); },
+  /* O Bip do timer, sentido na mão além de ouvido. */
+  bip(fonte) { return Vibra.pulso(fonte, 1.0, 220); }
 };
 
 
@@ -10594,7 +10885,7 @@ const XR = {
     k: 1, escala: 'real',
     medida: null,
     postoIdx: 0, postoCorrente: null,
-    tracado: true, calibrando: null,
+    tracado: true, calibrando: null, comando: '',
     origem: { x: 0, y: 0, z: 0 },
     giro: { x: 0, y: 0, z: 0, w: 1 },
     giroInv: { x: 0, y: 0, z: 0, w: 1 },
@@ -11110,6 +11401,7 @@ const XR = {
         e.temCano = true;
         e.mao = usar.src.handedness || '';
       }
+      XR.fonteDoTiro = usar.src;
       const gp = usar.src.gamepad;
       const bt = gp && gp.buttons && gp.buttons[XR.BOTAO.gatilho];
       if (bt) e.gatilho = XR.num(bt.value, bt.pressed ? 1 : 0);
@@ -11136,22 +11428,49 @@ const XR = {
 
   /* art. 3.2 — o Bip abre a passagem; o atraso aleatório impede o Atleta de
      antecipar a largada. */
+  /* Comandos de Pista (art. 4.4.d/f) e só então o timer. O último comando é
+     "A ESPERA!" — o "stand by" da modalidade — e depois vem a contagem
+     randômica do Timer e o BIP, que abre a passagem (art. 3.2). */
   armar() {
     if (!XR.corrida) return null;
+    if (XR.cancelarComandos) { XR.cancelarComandos(); XR.cancelarComandos = null; }
     try { XR.estagio && XR.estagio.limparImpactos && XR.estagio.limparImpactos(); } catch (e) { /* nada */ }
     try { XR.estagio && XR.estagio.limparDestaques && XR.estagio.limparDestaques(); } catch (e) { /* nada */ }
     XR.estado.postoIdx = 0;
     if (XR.estado.escala === 'estatico') XR.posicionarRaiz(XR.postoId(0), XR.estado.ancora);
-    const ms = Corrida.armar(XR.corrida);
+
+    /* o A/X que chegou até aqui É o gesto do usuário que libera o áudio */
+    Som.iniciar();
+
+    const cfg = (XR.ctx && XR.ctx.cfg) || {};
+    const mun = XR.corrida.municao;
+    const camaraComMunicao = !!(mun && mun.naCamara);
+    const lista = Som.comandos(cfg.comandos === 'completa' ? 'completa' : 'curta', camaraComMunicao);
+
     XR.modoPainel('corrida');
-    XR.aviso('Passagem armada — aguarde o Bip (' + XR.n((XR.num(ms, 0) / 1000), 1) + ' s).');
-    return ms;
+    XR.estado.comando = lista.length ? lista[0].txt : '';
+    XR.aviso(XR.estado.comando);
+
+    XR.cancelarComandos = Som.sequencia(lista,
+      (txt, fonte) => {
+        XR.estado.comando = txt;
+        XR.aviso(txt + (fonte ? ' (' + fonte + ')' : ''));
+      },
+      () => {
+        XR.cancelarComandos = null;
+        XR.estado.comando = '';
+        const ms = Corrida.armar(XR.corrida);
+        XR.aviso('Timer armado — aguarde o Bip.');
+      });
+    return XR.corrida;
   },
 
   /* art. 3.2 — do Bip ao último estampido. Encerrar apura tudo (parte 09). */
   encerrar() {
     const c = XR.corrida;
     if (!c) return null;
+    if (XR.cancelarComandos) { XR.cancelarComandos(); XR.cancelarComandos = null; }
+    XR.estado.comando = '';
     if (c.estado === 'pronta') return null;
     let saida = null;
     try {
@@ -11252,6 +11571,16 @@ const XR = {
      carregador, solte quando a arma estiver pronta. Qual Recarga foi, a
      Emergência ou a Tática, sai do ESTADO DA ARMA, não de um menu.
      ------------------------------------------------------------------ */
+  /* O BIP do timer, ouvido e SENTIDO. Chamado pela parte 09 pelo gancho de
+     mudança de estado — nunca antes, para o instante do Bip ser o mesmo que a
+     apuração usa (art. 3.2). */
+  aoBip() {
+    Som.bip();
+    Vibra.bip(XR.fonteDoTiro);
+    XR.estado.comando = '';
+    XR.aviso('BIP — passagem correndo.', 'ok');
+  },
+
   recarregarInicio(tMs) {
     const e = XR.estado;
     if (e.calibrando) return;
@@ -11273,6 +11602,7 @@ const XR = {
     if (!XR.corrida || typeof Corrida.concluirRecarga !== 'function') return;
     const r = Corrida.concluirRecarga(XR.corrida, tMs);
     if (r && r.ok && r.recarga) {
+      Som.recarga(r.recarga.tipo); Vibra.recarga(XR.fonteDoTiro);
       XR.aviso(r.recarga.txt + ' ' + r.recarga.duracao.toFixed(2).replace('.', ',') + ' s.', 'ok');
     } else if (r && r.txt) {
       XR.aviso(r.txt, 'alerta');
@@ -11284,6 +11614,10 @@ const XR = {
     const e = XR.estado;
     const mun = (XR.corrida && XR.corrida.municao) ? Municao.resumo(XR.corrida.municao) : null;
     let instrucao = '', nivel = 'alerta';
+    /* Enquanto o Árbitro "grita" os comandos, é isso e mais nada que importa */
+    if (e.comando) { return { municao: mun, instrucao: e.comando, instrucaoNivel: 'ok',
+                              escala: e.escala || 'real', correndo: true,
+                              estadoTexto: '', destaque: null }; }
     if (e.calibrando) { instrucao = 'CALIBRANDO O CANO — gatilho colhe amostra, B/Y encerra'; }
     else if (XR.corrida && XR.corrida.municao) { instrucao = Municao.instrucao(XR.corrida.municao); }
     if (!instrucao && XR.corrida) {
@@ -11488,8 +11822,15 @@ const XR = {
            Posto com a arma visivelmente vazia é 1 EP (art. 3.8.3.f). */
         const tiro = Corrida.tentarDisparo ? Corrida.tentarDisparo(XR.corrida, tMs, pose, 'gatilho')
                                            : { ok: true, disparo: Corrida.disparo(XR.corrida, tMs, pose, 'gatilho') };
-        if (tiro && tiro.ok && tiro.disparo) XR.marcarImpacto(tiro.disparo);
-        else if (tiro && !tiro.ok) XR.aviso(tiro.txt || 'Arma vazia.', 'alerta');
+        if (tiro && tiro.ok && tiro.disparo) {
+          XR.marcarImpacto(tiro.disparo);
+          /* estampido e coice — tempero, não sinal: se o áudio falhar, nada
+             na apuração muda */
+          Som.disparo(); Vibra.disparo(XR.fonteDoTiro);
+        } else if (tiro && !tiro.ok) {
+          Som.seco(); Vibra.seco(XR.fonteDoTiro);
+          XR.aviso(tiro.txt || 'Arma vazia.', 'alerta');
+        }
       }
     }
 
@@ -11694,7 +12035,12 @@ const XR = {
 
     /* corrida e detector --------------------------------------------------- */
     XR.corrida = c.corrida || (typeof Corrida !== 'undefined' ? Corrida.criar(c.pista, cfg) : null);
-    if (XR.corrida) XR.corrida.pista = XR.corrida.pista || c.pista;
+    if (XR.corrida) {
+      XR.corrida.pista = XR.corrida.pista || c.pista;
+      /* o Bip é o instante que a apuração usa (art. 3.2): som e vibração saem
+         do mesmo gancho, nunca de um timer paralelo */
+      XR.corrida.aoBip = XR.aoBip;
+    }
 
     XR.detector = c.detector || null;
     if (!XR.detector && typeof Detector !== 'undefined' && Detector && typeof Detector.criar === 'function') {
@@ -15506,6 +15852,8 @@ const PISTAXR = {
   croqui: Croqui,
   municao: (typeof Municao !== 'undefined') ? Municao : null,
   hud: (typeof HUD !== 'undefined') ? HUD : null,
+  som: (typeof Som !== 'undefined') ? Som : null,
+  vibra: (typeof Vibra !== 'undefined') ? Vibra : null,
   painel: (typeof Painel !== 'undefined') ? Painel : null,
   xr: (typeof XR !== 'undefined') ? XR : null,
   importador: (typeof Importador !== 'undefined') ? Importador : null,

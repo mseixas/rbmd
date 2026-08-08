@@ -271,6 +271,43 @@ Resíduo acima de 5 mm → refaça. O perfil fica salvo por arma.
 | **B / Y** | **PRÓXIMO POSTO** — só no modo `estatico` |
 | **segurar B / Y** 1,5 s | **SAIR** da realidade mista |
 
+### Começar: os comandos de Pista
+
+Apertar A/X não larga a passagem na hora. O app grita os **comandos do Árbitro**
+(art. 4.4.d/f) e só então arma o timer:
+
+> **A ESPERA!** → contagem randômica → **BIP**
+
+"A ESPERA" é o *stand by* da modalidade — é o último comando antes de o Árbitro
+apertar o timer. Em *Som e comandos* dá para trocar para a **sequência
+completa**, que é a de prova:
+
+> ÓCULOS E ABAFADOR! → PISTA QUENTE! → ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE
+> PRONTO! → O ATIRADOR ESTÁ PRONTO? → A ESPERA! → BIP
+
+Com a câmara iniciando municiada o terceiro comando vira **CARREGUE E FIQUE
+PRONTO**, como manda o art. 4.4.d. Os comandos são falados em pt-BR e
+**sempre** aparecem escritos no painel — se o áudio falhar, a passagem não para.
+
+### Som e vibração
+
+Nenhum arquivo de áudio: o app é um arquivo só. Tudo é sintetizado na hora com
+Web Audio — o estampido é ruído filtrado com decaimento rápido mais um golpe
+grave, o Bip é o do timer de prova, e há o clique seco do percussor em câmara
+vazia e o estalo do carregador.
+
+O controle vibra no disparo (forte e curto, o coice), no Bip, na recarga e no
+percussor em vazio. Usa `hapticActuators` do WebXR e cai para o
+`vibrationActuator` do Gamepad API. Sem hardware de vibração, o app segue igual:
+**nenhum sinal do app depende só de som ou de vibração**.
+
+### Passagem concluída devolve a munição
+
+Ao encerrar, munição e carregadores voltam ao estado da Ficha, prontos para a
+próxima passada. A restauração acontece **depois** da apuração — ela precisa do
+estado real para julgar a Recarga exigida (art. 3.8.6.g/h/i) — e o estado gasto
+fica guardado, então o relatório continua fiel ao que aconteceu.
+
 ### O tempo é o do último estampido
 
 Encerrar é um comando, não um cronômetro. O **tempo de passagem vai do Bip ao
