@@ -260,14 +260,23 @@ Resíduo acima de 5 mm → refaça. O perfil fica salvo por arma.
 
 ### 5. Correr
 
+**Um botão, uma função.**
+
 | Controle | Ação |
 |---|---|
 | **Gatilho** | **ATIRAR** (`buttons[0].value > 0,6`, rearme abaixo de 0,2) |
-| **A / X** | **COMEÇAR** — arma a corrida (delay aleatório + Bip) · em `estatico`, avança de Posto |
-| **B / Y** | **PARAR** a passagem |
-| **segurar B / Y** 1,5 s | **SAIR** da realidade mista |
+| **A / X** | **COMEÇAR** e, com a passagem correndo, **ENCERRAR**. É o mesmo botão, e o rótulo troca sozinho na barra. |
 | **Aperto** (grip) | **RECARREGAR** — segure enquanto troca o carregador, solte quando a arma estiver pronta |
 | **Manche** (clique) | **RECENTRAR** a Pista à sua frente |
+| **B / Y** | **PRÓXIMO POSTO** — só no modo `estatico` |
+| **segurar B / Y** 1,5 s | **SAIR** da realidade mista |
+
+### O tempo é o do último estampido
+
+Encerrar é um comando, não um cronômetro. O **tempo de passagem vai do Bip ao
+ÚLTIMO DISPARO** (art. 3.2) — nunca até o instante em que você apertou A/X para
+encerrar. Se você atirar aos 6,20 s e só encerrar aos 11,20 s, o tempo é
+**6,20 s**. O relógio para no último estampido e fica lá.
 
 Essa mesma barra fica fixa no **rodapé do painel**, dentro dos óculos. Ninguém
 lembra qual botão faz o quê com o headset na cabeça. A barra também carrega o

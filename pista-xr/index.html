@@ -6921,9 +6921,11 @@ const Corrida = {
       if (ultA && Corrida.ehNum(ultA.t)) t = Math.max(t, ultA.t);
       t = M.cs(Math.max(0, t));
     } else if (c.estado === 'terminada') {
+      /* art. 3.2 — parado, o cronômetro mostra o ÚLTIMO ESTAMPIDO, nunca o
+         instante do clique que encerrou. */
       t = Corrida.ehNum(c.resultado && c.resultado.tempoDePassagem)
         ? c.resultado.tempoDePassagem
-        : M.cs(Corrida.num(c.tFim, 0));
+        : (Corrida.ehNum(c.tPassagem) ? c.tPassagem : M.cs(Corrida.num(c.tFim, 0)));
     }
 
     const disparos = (c.disparos || []).map(d => ({
@@ -7050,6 +7052,12 @@ const Corrida = {
     if (ultimoDisparo && Corrida.ehNum(ultimoDisparo.t)) fim = Math.max(fim, ultimoDisparo.t);
     if (ultimaAmostra && Corrida.ehNum(ultimaAmostra.t)) fim = Math.max(fim, ultimaAmostra.t);
     c.tFim = M.cs(Math.max(0, fim));
+
+    /* art. 3.2 — o TEMPO DE PASSAGEM vai do Bip ao ÚLTIMO ESTAMPIDO, não até o
+       instante em que o Atleta apertou o botão de encerrar. `tFim` continua
+       marcando o fim da SESSÃO (é ele que fecha a trilha e o replay); quem vale
+       para o cronômetro e para a apuração é `tPassagem`. */
+    c.tPassagem = ultimoDisparo && Corrida.ehNum(ultimoDisparo.t) ? M.cs(ultimoDisparo.t) : 0;
 
     const jaTerminada = c.estado === 'terminada';
     Corrida.trocarEstado(c, 'terminada');
@@ -11279,12 +11287,22 @@ const XR = {
     if (e.calibrando) { instrucao = 'CALIBRANDO O CANO — gatilho colhe amostra, B/Y encerra'; }
     else if (XR.corrida && XR.corrida.municao) { instrucao = Municao.instrucao(XR.corrida.municao); }
     if (!instrucao && XR.corrida) {
-      if (XR.corrida.estado === 'pronta') { instrucao = 'APERTE A / X PARA COMEÇAR'; nivel = 'ok'; }
+      if (XR.corrida.estado === 'pronta') { instrucao = 'A / X PARA COMEÇAR'; nivel = 'ok'; }
       else if (XR.corrida.estado === 'aguardando') { instrucao = 'PRONTO… espere o BIP'; nivel = 'ok'; }
-      else if (XR.corrida.estado === 'terminada') { instrucao = 'PASSAGEM ENCERRADA — A / X recomeça'; nivel = 'ok'; }
+      else if (XR.corrida.estado === 'correndo') { instrucao = 'A / X PARA ENCERRAR'; nivel = 'ok'; }
+      else if (XR.corrida.estado === 'terminada') {
+        /* art. 3.2 — o tempo que vale é o do ÚLTIMO ESTAMPIDO */
+        const tp = XR.corrida.resultado ? XR.corrida.resultado.tempoDePassagem : XR.corrida.tPassagem;
+        instrucao = 'ENCERRADA no último disparo' +
+          (XR.num(tp, 0) ? ' · ' + XR.num(tp, 0).toFixed(2).replace('.', ',') + ' s' : '') +
+          ' — A / X recomeça';
+        nivel = 'ok';
+      }
     }
     return {
       municao: mun, instrucao, instrucaoNivel: nivel,
+      escala: e.escala || 'real',
+      correndo: !!(XR.corrida && (XR.corrida.estado === 'correndo' || XR.corrida.estado === 'aguardando')),
       estadoTexto: 'escala ' + (e.escala || 'real') + ' · k = ' + (XR.num(e.k, 1)).toFixed(3),
       destaque: e.recarregando ? 'RECARREGAR' : null
     };
@@ -11414,17 +11432,23 @@ const XR = {
     if (XR.corrida) Corrida.amostrar(XR.corrida, tMs, pose);
     else if (XR.detector) { try { XR.detector.amostrarPose(tMs, pose); } catch (er) { /* nada */ } }
 
-    /* 4. botões */
+    /* 4. BOTÕES — um botão, uma função. Nada de A/X armar a passagem e trocar
+          de Posto ao mesmo tempo: era isso que embaralhava o simulador.
+
+          A/X     COMEÇAR e, com a passagem correndo, ENCERRAR (mesmo botão)
+          B/Y     próximo Posto no modo estático · segurado 1,5 s, SAIR
+          APERTO  recarregar
+          MANCHE  recentrar a Pista                                          */
     if (XR.borda('ax', ent.botao.ax)) {
-      if (e.escala === 'estatico') XR.avancarPosto();
-      else XR.armar();
+      if (e.calibrando) { /* em calibração o gatilho colhe amostra; A/X não mexe */ }
+      else if (XR.corrida && (XR.corrida.estado === 'correndo' || XR.corrida.estado === 'aguardando')) {
+        XR.encerrar();
+      } else {
+        XR.armar();
+      }
     }
-    /* B/Y curto PARA a passagem; B/Y segurado 1,5 s SAI da realidade mista.
-       Sem isso não havia como voltar sem tirar os óculos. */
-    if (XR.borda('by', ent.botao.by)) {
-      e.byDesde = tMs;
-      e.bySaiu = false;
-    }
+
+    if (XR.borda('by', ent.botao.by)) { e.byDesde = tMs; e.bySaiu = false; }
     if (ent.botao.by && e.byDesde && !e.bySaiu && (tMs - e.byDesde) >= 1500) {
       e.bySaiu = true;
       XR.aviso('Saindo da realidade mista…');
@@ -11434,7 +11458,8 @@ const XR = {
     if (!ent.botao.by && e.byDesde && !e.bySaiu) {
       e.byDesde = 0;
       if (e.calibrando) XR.encerrarCalibracao();
-      else XR.encerrar();
+      else if (e.escala === 'estatico') XR.avancarPosto();
+      else XR.recentrar(true);
     }
     if (!ent.botao.by) { e.byDesde = 0; e.bySaiu = false; }
 
@@ -11468,7 +11493,10 @@ const XR = {
       }
     }
 
-    /* 6. traçado do cano */
+    /* 6. laser de mira do cano. A visibilidade é decidida TODO QUADRO: o
+          traçado some sozinho quando o controle perde tracking, e volta
+          quando ele reaparece, sem depender de nenhum botão. */
+    if (XR.tracadoObj) XR.tracadoObj.objeto.visible = !!(e.tracado && ent.temCano);
     if (e.tracado && XR.tracadoObj && ent.temCano) {
       const perfil = XR.perfilDeCano();
       const raioMundo = Cano.raio(ent.cano.pos, ent.cano.quat, perfil);
@@ -11660,6 +11688,9 @@ const XR = {
     /* laser de mira do cano — LIGADO por padrão */
     XR.tracadoObj = XR.criarTracado(THREE);
     XR.cena.add(XR.tracadoObj.objeto);
+    /* O grupo nasce invisível; quem o acendia era o APERTO, que virou
+       RECARREGAR. Sem esta linha o laser simplesmente não aparece. */
+    XR.tracadoObj.objeto.visible = !!XR.estado.tracado;
 
     /* corrida e detector --------------------------------------------------- */
     XR.corrida = c.corrida || (typeof Corrida !== 'undefined' ? Corrida.criar(c.pista, cfg) : null);
@@ -11834,11 +11865,13 @@ const HUD = {
   /* Um controle, uma frase. Nada de manual. */
   CONTROLES: [
     { tecla: 'GATILHO', acao: 'ATIRAR' },
-    { tecla: 'A / X', acao: 'COMEÇAR' },
-    { tecla: 'B / Y', acao: 'PARAR' },
-    { tecla: 'segure B / Y', acao: 'SAIR' },
+    /* Um botão, uma função. A/X é o mesmo botão para começar e para encerrar —
+       o rótulo troca conforme o estado da passagem. */
+    { tecla: 'A / X', acao: 'COMEÇAR', alterna: 'ENCERRAR' },
     { tecla: 'APERTO', acao: 'RECARREGAR' },
-    { tecla: 'MANCHE', acao: 'RECENTRAR' }
+    { tecla: 'MANCHE', acao: 'RECENTRAR' },
+    { tecla: 'B / Y', acao: 'PRÓXIMO POSTO', soEstatico: true },
+    { tecla: 'segure B / Y', acao: 'SAIR' }
   ],
 
   /* Instala o rodapé num painel já criado. Devolve o mesmo painel. */
@@ -11917,8 +11950,9 @@ const HUD = {
     const linha2 = y0 + 98;
     const ativos = HUD.CONTROLES.filter(c => {
       if (c.acao === 'RECARREGAR') return !(mun && mun.ativo === false);
+      if (c.soEstatico) return d.escala === 'estatico';
       return true;
-    });
+    }).map(c => (c.alterna && d.correndo) ? { tecla: c.tecla, acao: c.alterna } : c);
 
     /* mede tudo antes, para distribuir sem estourar a largura */
     g.font = '700 15px ' + mono;
