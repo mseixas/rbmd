@@ -3978,10 +3978,10 @@ const Cano = {
   /* O `gripSpace` do WebXR tem o −Z ao longo do CABO do controle, saindo pelo
      topo. Usar ele cru faz o cano apontar de baixo para cima, como uma lanterna
      — não como uma arma. O Touch do Quest já tem punho e gatilho: empunhado
-     como pistola, o cano sai à frente, uns 45° abaixo do eixo do cabo.
+     como pistola, o cano sai à frente, uns 50° abaixo do eixo do cabo.
      Por isso o perfil padrão é o cabo INCLINADO, e o ângulo é ajustável ao
      vivo dentro dos óculos, porque cada mão empunha de um jeito. */
-  INCLINACAO_PADRAO: -45,
+  INCLINACAO_PADRAO: -50,
 
   /* direção no referencial do grip para uma inclinação em graus: girar (0,0,−1)
      em torno de X por θ dá (0, sen θ, −cos θ). θ negativo abaixa o cano. */
@@ -3991,7 +3991,7 @@ const Cano = {
   },
 
   PRESETS: {
-    pistola: { nome: 'Pistola', inclinacao: -45, origem: { x: 0, y: -0.02, z: -0.06 },
+    pistola: { nome: 'Pistola', inclinacao: -50, origem: { x: 0, y: -0.02, z: -0.06 },
                dica: 'empunhadura de pistola: cano à frente, seguindo o ângulo natural do punho' },
     longa:   { nome: 'Arma longa', inclinacao: -25, origem: { x: 0, y: -0.02, z: -0.14 },
                dica: 'carabina/fuzil: cano mais alinhado com o antebraço e mais à frente' },
@@ -4015,12 +4015,12 @@ const Cano = {
   },
 
   PERFIL_SINTETICO: {
-    nome: 'Pistola (−45°)',
+    nome: 'Pistola (−50°)',
     preset: 'pistola',
-    inclinacao: -45,
+    inclinacao: -50,
     origem: { x: 0, y: -0.02, z: -0.06 },
-    /* (0, sen(−45°), −cos(−45°)) */
-    direcao: { x: 0, y: -0.7071067811865475, z: -0.7071067811865476 },
+    /* (0, sen(−50°), −cos(−50°)) */
+    direcao: { x: 0, y: -0.766044443118978, z: -0.6427876096865393 },
     residuo: 0,
     sintetico: true
   },

@@ -277,7 +277,7 @@ lembra qual botão faz o quê com o headset na cabeça.
 O `gripSpace` do WebXR tem o −Z ao longo do **cabo** do controle, saindo pelo
 topo. Usado cru, o cano aponta de baixo para cima, como uma lanterna. O Touch do
 Quest já tem punho e gatilho: empunhado como pistola, o cano sai **à frente**,
-uns **45° abaixo** do eixo do cabo. É esse o perfil padrão (`Pistola −45°`), e o
+uns **50° abaixo** do eixo do cabo. É esse o perfil padrão (`Pistola −50°`), e o
 ângulo é ajustável — cada mão empunha de um jeito. Há também um preset de
 **arma longa** (−25°) e o **eixo cru do cabo** (0°), para referência.
 
