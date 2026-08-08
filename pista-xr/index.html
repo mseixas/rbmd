@@ -7539,6 +7539,8 @@ const Som = {
   volume: 0.8,
   ligado: true,
   voz: true,
+  /* reserva do navegador: útil no desktop, não confiável dentro do XR */
+  vozDoNavegador: false,
   ultimaFala: '',
 
   /* Só pode nascer dentro de um gesto do usuário (art. do navegador, não do
@@ -7697,13 +7699,22 @@ const Som = {
     } catch (e) { return null; }
   },
 
-  /* Fala o comando. É COMPLEMENTO: o texto sempre aparece escrito no painel,
-     então o app funciona igual num aparelho sem voz instalada. */
+  /* Fala o comando. PRIMEIRO tenta a voz pré-sintetizada (§21), que toca no
+     MESMO grafo do Bip e do estampido — se o estampido sai, ela sai. O
+     `speechSynthesis` do navegador fica só como reserva no desktop: dentro da
+     sessão imersiva ele costuma não tocar, e nem sempre há voz instalada.
+     De qualquer forma o texto está SEMPRE escrito, em tela cheia. */
   falar(texto, lang) {
-    if (!Som.voz || !texto || typeof speechSynthesis === 'undefined' ||
+    if (!Som.voz || !texto) return false;
+    Som.ultimaFala = texto;
+
+    if (typeof Voz !== 'undefined' && Voz.pronta(texto) && Som.pronto()) {
+      if (Voz.falar(texto, Som.ctx, Som.ganho, 1)) return true;
+    }
+    if (!Som.vozDoNavegador) return false;
+    if (typeof speechSynthesis === 'undefined' ||
         typeof SpeechSynthesisUtterance === 'undefined') return false;
     try {
-      Som.ultimaFala = texto;
       const idioma = lang || Som.IDIOMAS[Som.idiomaValido(Som.idioma)].voz;
       const u = new SpeechSynthesisUtterance(texto);
       u.lang = idioma;
@@ -7714,6 +7725,14 @@ const Som = {
       speechSynthesis.speak(u);
       return true;
     } catch (e) { return false; }
+  },
+
+  /* Renderiza os comandos do idioma em buffer, antes da sessão abrir. */
+  async prepararVoz(idioma) {
+    if (typeof Voz === 'undefined') return false;
+    Som.iniciar();
+    if (!Som.ctx) return false;
+    return await Voz.preparar(Som.ctx, idioma || Som.idioma);
   },
 
   calar() {
@@ -7853,6 +7872,498 @@ const Vibra = {
   recarga(fonte) { return Vibra.pulso(fonte, 0.5, 90); },
   /* O Bip do timer, sentido na mão além de ouvido. */
   bip(fonte) { return Vibra.pulso(fonte, 1.0, 220); }
+};
+
+
+/* ========================= 21-voz.js ========================= */
+/* ===========================================================================
+   §21. VOZ PRÉ-SINTETIZADA EM WEB AUDIO
+
+   O `speechSynthesis` do navegador não é confiável dentro de uma sessão
+   imersiva: ele sai por um caminho de áudio do sistema que o WebXR pode
+   simplesmente não tocar, e nem sempre há voz instalada no idioma. Aqui a voz
+   é SINTETIZADA pelo próprio app, com um sintetizador de formantes, e
+   RENDERIZADA EM BUFFER antes da sessão abrir. Na hora do comando o que toca é
+   um `AudioBufferSourceNode` no mesmo grafo do Bip e do estampido — se o
+   estampido sai, a voz sai.
+
+   Como funciona: uma fonte glotal (dente de serra com jitter) para os sons
+   sonoros, ruído para os surdos, passando por três filtros de banda em
+   paralelo nas frequências de formante F1/F2/F3 de cada fonema. É síntese de
+   formantes clássica, em umas poucas dezenas de linhas.
+
+   Honestidade técnica: NÃO é voz humana e não vai soar como uma. É inteligível
+   quando você sabe o que está escrito — e está sempre escrito, em tela cheia
+   (§18). A voz é o reforço do ritmo do comando, não a fonte da informação.
+   ======================================================================== */
+
+const Voz = {
+
+  /* Formantes em Hz e tipo de excitação. `s` = sonoro, `r` = ruído (surdo),
+     `p` = plosiva (silêncio curto + estouro). Valores de tabela clássica de
+     formantes para voz masculina. */
+  FONEMAS: {
+    /* vogais */
+    a:  { f: [730, 1090, 2440], t: 's', d: 0.13 },
+    e:  { f: [530, 1840, 2480], t: 's', d: 0.12 },
+    E:  { f: [660, 1720, 2410], t: 's', d: 0.13 },   // é aberto
+    i:  { f: [270, 2290, 3010], t: 's', d: 0.11 },
+    o:  { f: [570, 840, 2410],  t: 's', d: 0.13 },
+    O:  { f: [570, 840, 2410],  t: 's', d: 0.13 },   // ó aberto
+    u:  { f: [300, 870, 2240],  t: 's', d: 0.11 },
+    /* semivogal do fim de ditongo: o "u" de "não", "no", "load" */
+    U:  { f: [350, 900, 2300],  t: 's', d: 0.06 },
+    I:  { f: [330, 2200, 2900], t: 's', d: 0.06 },
+    'ə': { f: [500, 1500, 2500], t: 's', d: 0.08 },  // átono
+    aI: { f: [730, 1600, 2440], t: 's', d: 0.18, desliza: [400, 2100, 2600] },
+    aU: { f: [730, 1090, 2440], t: 's', d: 0.18, desliza: [350, 900, 2300] },
+    eI: { f: [530, 1840, 2480], t: 's', d: 0.16, desliza: [330, 2200, 2900] },
+    /* consoantes sonoras */
+    m:  { f: [280, 900, 2200],  t: 's', d: 0.07, nasal: true },
+    n:  { f: [280, 1700, 2600], t: 's', d: 0.07, nasal: true },
+    l:  { f: [360, 1300, 2700], t: 's', d: 0.07 },
+    r:  { f: [420, 1300, 1600], t: 's', d: 0.07 },
+    R:  { f: [400, 1100, 1500], t: 'r', d: 0.06 },   // r vibrante/gutural
+    d:  { f: [300, 1700, 2600], t: 'p', d: 0.05 },
+    b:  { f: [250, 900, 2200],  t: 'p', d: 0.05 },
+    g:  { f: [300, 1500, 2200], t: 'p', d: 0.05 },
+    v:  { f: [280, 1100, 2200], t: 'r', d: 0.06 },
+    z:  { f: [300, 1700, 2600], t: 'r', d: 0.07 },
+    j:  { f: [300, 1900, 2600], t: 'r', d: 0.07 },   // j de "já"
+    /* consoantes surdas */
+    s:  { f: [400, 5500, 7000], t: 'r', d: 0.09 },
+    S:  { f: [400, 2400, 3200], t: 'r', d: 0.09 },   // ch / sh
+    f:  { f: [400, 1200, 2400], t: 'r', d: 0.08 },
+    t:  { f: [400, 1800, 2700], t: 'p', d: 0.05 },
+    p:  { f: [300, 900, 2200],  t: 'p', d: 0.05 },
+    k:  { f: [400, 1600, 2300], t: 'p', d: 0.05 },
+    h:  { f: [500, 1500, 2500], t: 'r', d: 0.05 },
+    '.': { f: [0, 0, 0], t: 'x', d: 0.10 },          // pausa entre palavras
+    '_': { f: [0, 0, 0], t: 'x', d: 0.04 }           // pausa curta
+  },
+
+  /* Transcrição fonética das frases. Escrita à mão porque são poucas e fixas —
+     e porque nenhum conversor grafema→fonema caberia num arquivo só. */
+  FRASES: {
+    'STAND BY!': 's t a n d _ b aI',
+    'EYES AND EARS!': 'aI z . a n d . i r z',
+    'RANGE IS HOT!': 'r eI n j . i z . h O t',
+    'SHOOTER, IF YOU HAVE NO QUESTIONS, MAKE READY!':
+      'S u t ə r . i f . i u . h a v . n o U . k u E s t S ə n z . m eI k . r E d i',
+    'SHOOTER, IF YOU HAVE NO QUESTIONS, LOAD AND MAKE READY!':
+      'S u t ə r . i f . i u . h a v . n o U . k u E s t S ə n z . l o U d . a n d . m eI k . r E d i',
+    'IS THE SHOOTER READY?': 'i z . d ə . S u t ə r . r E d i',
+
+    'A ESPERA!': 'a . e s p E r a',
+    'ÓCULOS E ABAFADOR!': 'O k u l o s . i . a b a f a d o r',
+    'PISTA QUENTE!': 'p i s t a . k e n t i',
+    'ATIRADOR, SE NÃO TEM DÚVIDA, FIQUE PRONTO!':
+      'a t i r a d o r . s i . n a U . t e m . d u v i d a . f i k i . p r o n t u',
+    'ATIRADOR, SE NÃO TEM DÚVIDA, CARREGUE E FIQUE PRONTO!':
+      'a t i r a d o r . s i . n a U . t e m . d u v i d a . k a R E g i . i . f i k i . p r o n t u',
+    'O ATIRADOR ESTÁ PRONTO?': 'u . a t i r a d o r . e s t a . p r o n t u',
+
+    '¡ATENCIÓN!': 'a t e n s i o n',
+    '¡OJOS Y OÍDOS!': 'o h o s . i . o i d o s',
+    '¡PISTA CALIENTE!': 'p i s t a . k a l i e n t e',
+    'TIRADOR, SI NO TIENE DUDAS, ¡PREPÁRESE!':
+      't i r a d o r . s i . n o . t i e n e . d u d a s . p r e p a r e s e',
+    'TIRADOR, SI NO TIENE DUDAS, ¡CARGUE Y PREPÁRESE!':
+      't i r a d o r . s i . n o . t i e n e . d u d a s . k a r g e . i . p r e p a r e s e',
+    '¿TIRADOR LISTO?': 't i r a d o r . l i s t o'
+  },
+
+  /* Buffers já renderizados, por frase. */
+  cache: {},
+  tom: 108,            // Hz da fonte glotal — voz masculina de comando
+  renderizando: false,
+
+  duracao(seq) {
+    let d = 0;
+    for (const f of seq) { const p = Voz.FONEMAS[f]; if (p) d += p.d; }
+    return d + 0.12;
+  },
+
+  /* Renderiza a frase num AudioBuffer, offline. É aqui que a voz é "gravada"
+     antes da sessão abrir. */
+  async renderizar(texto, ctxDestino) {
+    const fon = Voz.FRASES[texto];
+    if (!fon) return null;
+    const OAC = (typeof OfflineAudioContext !== 'undefined') ? OfflineAudioContext
+              : (typeof webkitOfflineAudioContext !== 'undefined' ? webkitOfflineAudioContext : null);
+    if (!OAC) return null;
+
+    const taxa = (ctxDestino && ctxDestino.sampleRate) || 48000;
+    const seq = fon.split(/\s+/).filter(Boolean);
+    const dur = Voz.duracao(seq);
+    const ctx = new OAC(1, Math.ceil(dur * taxa), taxa);
+
+    const saida = ctx.createGain();
+    saida.gain.value = 1;
+    saida.connect(ctx.destination);
+
+    /* fonte glotal: dente de serra com leve queda de tom no fim da frase */
+    const glote = ctx.createOscillator();
+    glote.type = 'sawtooth';
+    const gGlote = ctx.createGain();
+    gGlote.gain.value = 0;
+    glote.connect(gGlote);
+
+    /* ruído para os fonemas surdos */
+    const n = Math.ceil(dur * taxa);
+    const bufRuido = ctx.createBuffer(1, n, taxa);
+    const dr = bufRuido.getChannelData(0);
+    for (let i = 0; i < n; i++) dr[i] = Math.random() * 2 - 1;
+    const ruido = ctx.createBufferSource();
+    ruido.buffer = bufRuido;
+    const gRuido = ctx.createGain();
+    gRuido.gain.value = 0;
+    ruido.connect(gRuido);
+
+    /* três formantes em paralelo, alimentados pelas duas fontes */
+    const forms = [];
+    for (let k = 0; k < 3; k++) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = [9, 11, 13][k];
+      bp.frequency.value = 500;
+      const gk = ctx.createGain();
+      gk.gain.value = [1.0, 0.62, 0.30][k];
+      gGlote.connect(bp); gRuido.connect(bp);
+      bp.connect(gk); gk.connect(saida);
+      forms.push(bp);
+    }
+
+    let t = 0.02;
+    for (const nome of seq) {
+      const p = Voz.FONEMAS[nome];
+      if (!p) continue;
+      const fim = t + p.d;
+      if (p.t === 'x') {                       // pausa
+        gGlote.gain.setTargetAtTime(0, t, 0.012);
+        gRuido.gain.setTargetAtTime(0, t, 0.012);
+        t = fim; continue;
+      }
+      for (let k = 0; k < 3; k++) {
+        forms[k].frequency.setTargetAtTime(p.f[k] || 500, t, 0.018);
+        if (p.desliza) forms[k].frequency.setTargetAtTime(p.desliza[k], t + p.d * 0.55, 0.030);
+      }
+      if (p.t === 's') {
+        gGlote.gain.setTargetAtTime(p.nasal ? 0.30 : 0.55, t, 0.012);
+        gRuido.gain.setTargetAtTime(0.02, t, 0.012);
+      } else if (p.t === 'r') {
+        gGlote.gain.setTargetAtTime(0.05, t, 0.012);
+        gRuido.gain.setTargetAtTime(0.30, t, 0.010);
+      } else {                                  // plosiva: silêncio e estouro
+        gGlote.gain.setTargetAtTime(0, t, 0.004);
+        gRuido.gain.setTargetAtTime(0, t, 0.004);
+        gRuido.gain.setTargetAtTime(0.55, t + p.d * 0.6, 0.004);
+        gRuido.gain.setTargetAtTime(0, t + p.d * 0.6 + 0.018, 0.010);
+      }
+      t = fim;
+    }
+    gGlote.gain.setTargetAtTime(0, t, 0.020);
+    gRuido.gain.setTargetAtTime(0, t, 0.020);
+
+    /* entonação: o comando cai no fim, como voz de quem manda */
+    glote.frequency.setValueAtTime(Voz.tom, 0);
+    glote.frequency.setValueAtTime(Voz.tom * 1.06, Math.max(0.02, t * 0.15));
+    glote.frequency.linearRampToValueAtTime(Voz.tom * 0.86, t);
+
+    glote.start(0); ruido.start(0);
+    glote.stop(dur); ruido.stop(dur);
+
+    try {
+      const buf = await ctx.startRendering();
+      /* Normaliza: a síntese de formantes sai bem mais baixa que o Bip, e uma
+         voz de comando que não se ouve ao lado do estampido não serve. */
+      const d = buf.getChannelData(0);
+      let pico = 0;
+      for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > pico) pico = a; }
+      if (pico > 1e-4) {
+        const g = Math.min(12, 0.85 / pico);
+        for (let i = 0; i < d.length; i++) d[i] *= g;
+      }
+      Voz.cache[texto] = buf;
+      return buf;
+    } catch (e) { return null; }
+  },
+
+  /* Renderiza TODAS as frases de um idioma antes da sessão abrir. */
+  async preparar(ctxDestino, idioma) {
+    if (Voz.renderizando) return false;
+    Voz.renderizando = true;
+    try {
+      const L = (typeof Som !== 'undefined' && Som.IDIOMAS)
+        ? Som.IDIOMAS[Som.idiomaValido(idioma)] : null;
+      const frases = [];
+      if (L) {
+        for (const modo of ['curta', 'completa']) {
+          for (const c of (L[modo] || [])) {
+            if (frases.indexOf(c.txt) < 0) frases.push(c.txt);
+            if (c.municiada && frases.indexOf(c.municiada) < 0) frases.push(c.municiada);
+          }
+        }
+      }
+      for (const f of frases) {
+        if (!Voz.cache[f]) await Voz.renderizar(f, ctxDestino);
+      }
+      return true;
+    } finally { Voz.renderizando = false; }
+  },
+
+  pronta(texto) { return !!Voz.cache[texto]; },
+
+  /* Toca a frase pelo MESMO grafo do Bip e do estampido. */
+  falar(texto, ctx, destino, volume) {
+    const buf = Voz.cache[texto];
+    if (!buf || !ctx || !destino) return false;
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = volume == null ? 1 : volume;
+      src.connect(g); g.connect(destino);
+      src.start();
+      return true;
+    } catch (e) { return false; }
+  },
+
+  limpar() { Voz.cache = {}; }
+};
+
+
+/* ========================= 20-arma.js ========================= */
+/* ===========================================================================
+   §20. ARMA SOBRE O CONTROLE
+
+   O Touch na mão é um controle, não uma arma — e ver um controle flutuando
+   quebra o treino. Aqui a Divisão escolhida na tela inicial vira um modelo 3D
+   por cima do controle: pistola, revólver, carabina ou fuzil.
+
+   Nada de arquivo de modelo: o app é UM arquivo só, sem rede. Tudo é montado
+   com primitivas do three.js — caixas, cilindros e um punho inclinado — no
+   referencial do controle, com o EIXO DO CANO no −Z, que é exatamente o eixo
+   do raio de mira (§7). Assim a boca do cano fica sobre a linha de tiro: o que
+   você vê é para onde o tiro vai.
+
+   Honestidade técnica: é uma silhueta de arma, não a SUA arma. Serve para dar
+   referência de empunhadura e de comprimento de cano. Alinhamento fino de
+   aparelho de pontaria continua sendo coisa do mundo real — o passthrough não
+   resolve miras.
+   ======================================================================== */
+
+const Arma = {
+
+  /* Comprimento do cano por tipo (m), do punho à boca. Valores de arma real,
+     para o comprimento aparente na mão bater com o que o Atleta conhece. */
+  MEDIDAS: {
+    pistola:  { cano: 0.20, altura: 0.135, largura: 0.032 },
+    revolver: { cano: 0.19, altura: 0.130, largura: 0.038 },
+    carabina: { cano: 0.46, altura: 0.115, largura: 0.032 },
+    fuzil:    { cano: 0.52, altura: 0.120, largura: 0.036 }
+  },
+
+  CORES: {
+    metal: 0x2a2f34, metalClaro: 0x3d454c, polimero: 0x1b1f23,
+    madeira: 0x4a3524, mira: 0xd8e4ea, optica: 0x111417
+  },
+
+  /* Qual modelo cada Divisão calça (art. 5.1 do Online 2026). */
+  tipoDaDivisao(divisaoId, arma) {
+    const id = String(divisaoId || '');
+    if (/revolver/i.test(id)) return 'revolver';
+    if (/^fuzil/i.test(id)) return 'fuzil';
+    if (/carabina/i.test(id)) return 'carabina';
+    if (/pistola/i.test(id)) return 'pistola';
+    /* sem id reconhecido, decide pela classe de arma da Divisão */
+    if (arma === 'revolver') return 'revolver';
+    if (arma === 'longa') return 'carabina';
+    return 'pistola';
+  },
+
+  rotulo(tipo) {
+    return { pistola: 'Pistola', revolver: 'Revólver',
+             carabina: 'Carabina', fuzil: 'Fuzil' }[tipo] || 'Pistola';
+  },
+
+  _mat(THREE, cor, brilho) {
+    return new THREE.MeshStandardMaterial({
+      color: cor, metalness: brilho == null ? 0.55 : brilho, roughness: 0.55
+    });
+  },
+
+  _caixa(THREE, l, a, c, mat, x, y, z, rotX) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(l, a, c), mat);
+    m.position.set(x || 0, y || 0, z || 0);
+    if (rotX) m.rotation.x = rotX;
+    return m;
+  },
+
+  _cilindro(THREE, raio, comp, mat, x, y, z, eixo) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(raio, raio, comp, 14), mat);
+    /* CylinderGeometry nasce no eixo Y; deitar no Z é o eixo do cano */
+    if (eixo !== 'y') m.rotation.x = Math.PI / 2;
+    m.position.set(x || 0, y || 0, z || 0);
+    return m;
+  },
+
+  /* --- PISTOLA: ferrolho, armação, punho inclinado, carregador, miras ----- */
+  _pistola(THREE, g) {
+    const met = Arma._mat(THREE, Arma.CORES.metal);
+    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.15);
+    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.2);
+    const d = Arma.MEDIDAS.pistola;
+
+    g.add(Arma._caixa(THREE, d.largura, 0.030, d.cano, met, 0, 0.018, -d.cano / 2 + 0.02));
+    g.add(Arma._caixa(THREE, d.largura - 0.004, 0.026, d.cano * 0.80, pol, 0, -0.010, -d.cano * 0.40 + 0.02));
+    g.add(Arma._cilindro(THREE, 0.0045, 0.02, met, 0, 0.018, -d.cano + 0.018));   // boca
+
+    /* punho: inclinado ~18° para trás, como o de uma pistola de serviço */
+    const punho = Arma._caixa(THREE, d.largura - 0.004, 0.105, 0.038, pol, 0, -0.070, 0.012);
+    punho.rotation.x = -0.31;
+    g.add(punho);
+    const carr = Arma._caixa(THREE, d.largura - 0.010, 0.030, 0.026, met, 0, -0.126, 0.030);
+    carr.rotation.x = -0.31;
+    g.add(carr);
+
+    /* guarda-mato */
+    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.021, 0.0042, 8, 16, Math.PI * 1.25), pol);
+    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
+    gm.position.set(0, -0.030, -0.020);
+    g.add(gm);
+
+    /* aparelho de pontaria — referência visual, não mira de verdade */
+    g.add(Arma._caixa(THREE, 0.004, 0.007, 0.004, mira, 0, 0.036, -d.cano + 0.030));
+    g.add(Arma._caixa(THREE, 0.016, 0.006, 0.005, mira, 0, 0.036, -0.012));
+    return g;
+  },
+
+  /* --- REVÓLVER: tambor, cano, punho de madeira -------------------------- */
+  _revolver(THREE, g) {
+    const met = Arma._mat(THREE, Arma.CORES.metalClaro, 0.8);
+    const mad = Arma._mat(THREE, Arma.CORES.madeira, 0.05);
+    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.2);
+    const d = Arma.MEDIDAS.revolver;
+
+    g.add(Arma._cilindro(THREE, 0.011, d.cano * 0.78, met, 0, 0.020, -d.cano * 0.55));
+    g.add(Arma._caixa(THREE, 0.012, 0.014, d.cano * 0.60, met, 0, 0.032, -d.cano * 0.45));  // trilho
+    g.add(Arma._cilindro(THREE, 0.021, 0.042, met, 0, 0.014, -0.030));                       // tambor
+    g.add(Arma._caixa(THREE, 0.016, 0.048, 0.055, met, 0, 0.000, 0.005));                    // armação
+
+    const punho = Arma._caixa(THREE, 0.030, 0.100, 0.040, mad, 0, -0.062, 0.020);
+    punho.rotation.x = -0.36;
+    g.add(punho);
+
+    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.020, 0.0040, 8, 16, Math.PI * 1.25), met);
+    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
+    gm.position.set(0, -0.026, -0.006);
+    g.add(gm);
+
+    g.add(Arma._caixa(THREE, 0.004, 0.008, 0.004, mira, 0, 0.042, -d.cano * 0.90));
+    return g;
+  },
+
+  /* --- LONGAS: cano, guarda-mão, coronha atrás da mão, óptica ------------ */
+  _longa(THREE, g, tipo) {
+    const met = Arma._mat(THREE, Arma.CORES.metal);
+    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.15);
+    const opt = Arma._mat(THREE, Arma.CORES.optica, 0.3);
+    const d = Arma.MEDIDAS[tipo] || Arma.MEDIDAS.carabina;
+
+    g.add(Arma._cilindro(THREE, 0.0085, d.cano * 0.62, met, 0, 0.022, -d.cano * 0.62));
+    g.add(Arma._caixa(THREE, 0.034, 0.034, d.cano * 0.40, pol, 0, 0.020, -d.cano * 0.32));   // guarda-mão
+    g.add(Arma._caixa(THREE, 0.036, 0.048, 0.150, met, 0, 0.014, -0.030));                    // caixa da culatra
+
+    /* a coronha fica ATRÁS da mão: é o que dá a sensação de arma longa */
+    g.add(Arma._caixa(THREE, 0.030, 0.044, 0.130, pol, 0, 0.006, 0.115));
+    g.add(Arma._caixa(THREE, 0.026, 0.030, 0.060, pol, 0, -0.014, 0.052));
+
+    const punho = Arma._caixa(THREE, 0.028, 0.078, 0.034, pol, 0, -0.052, 0.020);
+    punho.rotation.x = -0.28;
+    g.add(punho);
+
+    const carr = Arma._caixa(THREE, 0.026, 0.090, 0.030, met, 0, -0.058, -0.028);
+    carr.rotation.x = 0.12;
+    g.add(carr);
+
+    /* óptica: as Divisões de Carabina e Fuzil são todas "Óptica" (art. 5.1) */
+    g.add(Arma._cilindro(THREE, 0.017, 0.110, opt, 0, 0.060, -0.055));
+    g.add(Arma._caixa(THREE, 0.012, 0.020, 0.014, met, 0, 0.046, -0.020));
+    g.add(Arma._caixa(THREE, 0.012, 0.020, 0.014, met, 0, 0.046, -0.090));
+
+    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.020, 0.0040, 8, 16, Math.PI * 1.25), pol);
+    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
+    gm.position.set(0, -0.020, -0.004);
+    g.add(gm);
+    return g;
+  },
+
+  /* Monta a arma no referencial do CONTROLE: origem na mão, −Z no eixo do
+     cano — o mesmo eixo do raio de mira, para a boca cair sobre a linha de
+     tiro. `perfil` ajusta quando o Atleta escolhe corrigir o eixo do cabo
+     (§7): aí o modelo acompanha a mesma inclinação, senão a arma apontaria
+     para um lado e o tiro para outro. */
+  criar(THREE, tipo, perfil) {
+    const t = Arma.MEDIDAS[tipo] ? tipo : 'pistola';
+    const g = new THREE.Group();
+    g.name = 'arma-' + t;
+    if (t === 'pistola') Arma._pistola(THREE, g);
+    else if (t === 'revolver') Arma._revolver(THREE, g);
+    else Arma._longa(THREE, g, t);
+
+    const raiz = new THREE.Group();
+    raiz.name = 'arma';
+    raiz.add(g);
+
+    /* Gira o modelo para o −Z local cair sobre a direção do perfil. Com o
+       perfil natural (targetRay) a direção JÁ é −Z e o giro é nulo. */
+    const dir = (perfil && perfil.direcao) || { x: 0, y: 0, z: -1 };
+    const n = Math.hypot(dir.x, dir.y, dir.z) || 1;
+    const ang = Math.asin(Math.max(-1, Math.min(1, -dir.y / n)));   // pitch do cano
+    g.rotation.x = -ang;
+    if (perfil && perfil.origem) {
+      g.position.set(perfil.origem.x || 0, perfil.origem.y || 0, perfil.origem.z || 0);
+    }
+
+    raiz.visible = false;                 // só aparece com o controle rastreado
+    return {
+      objeto: raiz,
+      tipo: t,
+      rotulo: Arma.rotulo(t),
+
+      /* Chamado a cada quadro com a pose do controle. */
+      acompanhar(pos, quat) {
+        if (!pos || !quat) { raiz.visible = false; return; }
+        raiz.position.set(pos.x, pos.y, pos.z);
+        raiz.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+        raiz.visible = true;
+      },
+
+      mostrar(v) { raiz.visible = !!v; },
+
+      /* Coice: recua e levanta a arma por alguns quadros. Puro visual. */
+      coice() {
+        g.position.z += 0.018;
+        g.rotation.x -= 0.13;
+      },
+      relaxar(dt) {
+        const base = -ang;
+        const p = (perfil && perfil.origem) ? (perfil.origem.z || 0) : 0;
+        const k = Math.min(1, (dt || 0.016) * 14);
+        g.position.z += (p - g.position.z) * k;
+        g.rotation.x += (base - g.rotation.x) * k;
+      },
+
+      dispose() {
+        raiz.traverse((o) => {
+          if (o.geometry) { try { o.geometry.dispose(); } catch (e) { /* nada */ } }
+          if (o.material) { try { o.material.dispose(); } catch (e) { /* nada */ } }
+        });
+        if (raiz.parent) raiz.parent.remove(raiz);
+      }
+    };
+  }
 };
 
 
@@ -11045,7 +11556,7 @@ const XR = {
      zerado no fim da sessão. Fora do `estado` de propósito: nada disto deve
      acabar num JSON de replay. */
   ctx: null, THREE: null, renderizador: null, cena: null, camera: null,
-  estagio: null, painel: null, etiqueta: null, tracadoObj: null,
+  estagio: null, painel: null, etiqueta: null, tracadoObj: null, arma: null,
   refSpace: null, espacoLimitado: null, detector: null, corrida: null,
   entradas: null, pose: null, tUltimo: 0, tPainel: 0, tAbertura: 0,
   amostrasPivo: null,
@@ -12013,6 +12524,7 @@ const XR = {
           /* estampido e coice — tempero, não sinal: se o áudio falhar, nada
              na apuração muda */
           Som.disparo(); Vibra.disparo(XR.fonteDoTiro);
+          if (XR.arma) XR.arma.coice();
         } else if (tiro && !tiro.ok) {
           Som.seco(); Vibra.seco(XR.fonteDoTiro);
           XR.aviso(tiro.txt || 'Arma vazia.', 'alerta');
@@ -12024,6 +12536,10 @@ const XR = {
           traçado some sozinho quando o controle perde tracking, e volta
           quando ele reaparece, sem depender de nenhum botão. */
     if (XR.tracadoObj) XR.tracadoObj.objeto.visible = !!(e.tracado && ent.temCano);
+    if (XR.arma) {
+      if (ent.temCano) { XR.arma.acompanhar(ent.cano.pos, ent.cano.quat); XR.arma.relaxar(dt); }
+      else XR.arma.mostrar(false);
+    }
     if (e.tracado && XR.tracadoObj && ent.temCano) {
       const perfil = XR.perfilDeCano();
       const raioMundo = Cano.raio(ent.cano.pos, ent.cano.quat, perfil);
@@ -12248,6 +12764,18 @@ const XR = {
     /* laser de mira do cano — LIGADO por padrão */
     XR.tracadoObj = XR.criarTracado(THREE);
     XR.cena.add(XR.tracadoObj.objeto);
+
+    /* Modelo da arma da Divisão escolhida, por cima do controle. Ver um
+       controle flutuando quebra o treino; ver a arma dá a referência de
+       empunhadura e de comprimento de cano. */
+    try {
+      if (typeof Arma !== 'undefined' && cfg.arma3d !== false) {
+        const tipo = Arma.tipoDaDivisao(cfg.divisao, cfg.arma);
+        XR.arma = Arma.criar(THREE, tipo, XR.perfilDeCano());
+        XR.cena.add(XR.arma.objeto);
+        XR.aviso('Arma na mão: ' + XR.arma.rotulo + '.');
+      } else { XR.arma = null; }
+    } catch (e) { XR.arma = null; }
     /* O grupo nasce invisível; quem o acendia era o APERTO, que virou
        RECARREGAR. Sem esta linha o laser simplesmente não aparece. */
     XR.tracadoObj.objeto.visible = !!XR.estado.tracado;
@@ -12395,6 +12923,7 @@ const XR = {
     }
     try { XR.etiqueta && XR.etiqueta.dispose(); } catch (er) { /* nada */ }
     try { XR.tracadoObj && XR.tracadoObj.dispose(); } catch (er) { /* nada */ }
+    try { XR.arma && XR.arma.dispose(); } catch (er) { /* nada */ }
     try { XR.painel && XR.painel.dispose && XR.painel.dispose(); } catch (er) { /* nada */ }
     try { XR.estagio && XR.estagio.dispose && XR.estagio.dispose(); } catch (er) { /* nada */ }
     if (XR.renderizador) {
@@ -12405,7 +12934,7 @@ const XR = {
       } catch (er) { /* nada */ }
     }
     XR.renderizador = null; XR.cena = null; XR.camera = null;
-    XR.estagio = null; XR.painel = null; XR.etiqueta = null; XR.tracadoObj = null;
+    XR.estagio = null; XR.painel = null; XR.etiqueta = null; XR.tracadoObj = null; XR.arma = null;
     XR.refSpace = null; XR.espacoLimitado = null;
     XR.THREE = null;
   }
@@ -13682,6 +14211,10 @@ const UI = {
       Som.iniciar();
       if (typeof ConfigSom !== 'undefined') ConfigSom.aplicar();
       Som.destravarVoz();
+      /* Renderiza os comandos em buffer ANTES de entrar: dentro da sessão o
+         que toca é um AudioBufferSource no mesmo grafo do estampido. */
+      UI.texto('xr-overlay-msg', 'Preparando os comandos de Pista…');
+      await Som.prepararVoz();
     } catch (e) { /* sem áudio: a passagem continua, só sem som */ }
 
     let corrida = null;
@@ -14725,8 +15258,11 @@ const ConfigSom = {
       Som.iniciar(); ConfigSom.aplicar(); Som.disparo();
     });
     const bs = ConfigSom.el('btn-som-sequencia');
-    if (bs) bs.addEventListener('click', () => {
+    if (bs) bs.addEventListener('click', async () => {
       Som.iniciar(); ConfigSom.aplicar();
+      const prev0 = ConfigSom.el('som-previa');
+      if (prev0) prev0.textContent = 'sintetizando a voz…';
+      await Som.prepararVoz();
       const cfg = ConfigSom.cfg();
       if (ConfigSom.cancelar) ConfigSom.cancelar();
       const prev = ConfigSom.el('som-previa');
@@ -14783,12 +15319,15 @@ const ConfigSom = {
     if (!e || typeof Som === 'undefined') return;
     const c = ConfigSom.cfg();
     const lista = Som.comandos(c.sequencia, false, c.idioma).map(x => x.txt);
-    const L = Som.IDIOMAS[c.idioma];
-    const v = Som.vozPara(L.voz);
     const partes = [lista.join('  →  ') + '  →  BIP'];
     if (!c.voz) partes.push('voz desligada — os comandos só aparecem escritos no painel');
-    else if (!v) partes.push('sem voz ' + L.voz + ' instalada neste aparelho: o comando sai escrito e com o tom curto');
-    e.className = 'nota' + ((!c.voz || !v) ? ' nota--alerta' : '');
+    else if (typeof Voz !== 'undefined') {
+      const prontas = lista.filter(t => Voz.pronta(t)).length;
+      partes.push(prontas === lista.length
+        ? 'voz pré-sintetizada pronta — toca no mesmo grafo do estampido'
+        : 'voz sintetizada ao abrir a sessão');
+    }
+    e.className = 'nota' + (!c.voz ? ' nota--alerta' : '');
     e.textContent = partes.join(' · ');
   }
 };
@@ -16238,6 +16777,8 @@ const PISTAXR = {
   municao: (typeof Municao !== 'undefined') ? Municao : null,
   hud: (typeof HUD !== 'undefined') ? HUD : null,
   som: (typeof Som !== 'undefined') ? Som : null,
+  voz: (typeof Voz !== 'undefined') ? Voz : null,
+  arma: (typeof Arma !== 'undefined') ? Arma : null,
   vibra: (typeof Vibra !== 'undefined') ? Vibra : null,
   painel: (typeof Painel !== 'undefined') ? Painel : null,
   xr: (typeof XR !== 'undefined') ? XR : null,

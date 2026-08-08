@@ -333,9 +333,50 @@ percussor em vazio. Usa `hapticActuators` do WebXR e cai para o
 
 **O áudio nasce no clique que abre a sessão**, na página — não no botão do
 controle. Apertar A/X dentro da sessão imersiva **não conta como gesto de
-usuário** para o navegador, e era por isso que o comando saía mudo. No mesmo
-clique a síntese de voz é destravada com uma fala em volume zero, e o
+usuário** para o navegador, e era por isso que o comando saía mudo. O
 `AudioContext` é reacordado quando a sessão muda de visibilidade.
+
+### A voz é sintetizada pelo próprio app
+
+O `speechSynthesis` do navegador **não é confiável dentro de uma sessão
+imersiva**: ele sai por um caminho de áudio do sistema que o WebXR pode
+simplesmente não tocar, e nem sempre há voz instalada no idioma.
+
+Então a voz é sintetizada aqui, por um **sintetizador de formantes**, e
+**renderizada em buffer antes de a sessão abrir** (~250 ms para os comandos de
+um idioma). Na hora do comando o que toca é um `AudioBufferSourceNode` no mesmo
+grafo do Bip e do estampido — **se o estampido sai, a voz sai**.
+
+Uma fonte glotal (dente de serra) para os sons sonoros, ruído para os surdos,
+passando por três filtros de banda nas frequências de formante F1/F2/F3 de cada
+fonema. As frases são poucas e fixas, então a transcrição fonética de cada uma
+está escrita à mão nos três idiomas.
+
+**Não é voz humana e não vai soar como uma.** É inteligível quando você sabe o
+que está escrito — e está sempre escrito, em tela cheia. A voz reforça o ritmo
+do comando; ela não é a fonte da informação.
+
+### A arma na mão
+
+O Touch é um controle, não uma arma, e ver um controle flutuando quebra o
+treino. A **Divisão escolhida na tela inicial** vira um modelo 3D por cima do
+controle:
+
+| Divisão | Modelo | Comprimento aparente |
+|---|---|---|
+| Pistola (todas) | pistola — ferrolho, punho inclinado, carregador, miras | 24 cm |
+| Revólver | revólver — tambor, cano, punho de madeira | 24 cm |
+| Carabina (todas) | carabina com óptica, coronha atrás da mão | 61 cm |
+| Fuzil | fuzil com óptica | 66 cm |
+
+Nada de arquivo de modelo: tudo montado com primitivas do three.js. O eixo do
+cano fica sobre **a mesma linha do raio de mira**, então a boca da arma cai
+sobre a linha de tiro — o que você vê é para onde o tiro vai. No disparo a arma
+**recua e levanta**, e volta sozinha.
+
+É uma silhueta de arma, não a *sua* arma: serve de referência de empunhadura e
+de comprimento de cano. Alinhamento fino de aparelho de pontaria continua sendo
+coisa do mundo real.
 
 Em *Som e comandos* dá para ajustar idioma, sequência (curta ou completa),
 volume, e ligar/desligar som, voz e vibração de forma independente — mais dois
