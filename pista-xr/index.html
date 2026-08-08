@@ -462,6 +462,23 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
 }
 .imp-engajamentos input { min-width: 150px; }
 
+/* ===== Resumo dos controles e cartão de munição ======================== */
+.controles-resumo { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--linha, #1b2830); }
+.controles-lista {
+  list-style: none; margin: 8px 0 6px; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.controles-lista li {
+  display: flex; align-items: baseline; gap: 7px;
+  background: #101a20; border: 1px solid #1e2a31; border-radius: 9px;
+  padding: 6px 11px; font-size: 13px; color: var(--texto-2, #8fa3b0);
+}
+.controles-lista b {
+  font-family: var(--mono, ui-monospace, monospace); font-size: 12px;
+  color: var(--ciano, #00d4ff); letter-spacing: .5px;
+}
+#mun-resumo { font-family: var(--mono, ui-monospace, monospace); }
+
 </style>
 </head>
 <body>
@@ -513,13 +530,23 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
     </section>
 
     <ul class="avisos-fixos">
-      <li><strong>Passthrough não resolve miras.</strong> A resolução e a latência do vídeo do Quest 3 não
-        permitem alinhar aparelho de pontaria como no mundo real. O que este app treina é
-        <em>ordem de engajamento, tempo, TPD, deslocamento e disciplina de cano</em> &mdash; não precisão fina.</li>
-      <li><strong>Nada sai do dispositivo.</strong> Ficha, corridas, replays e perfis de cano ficam no
-        armazenamento local do aparelho. Não há servidor, não há telemetria, não há rede.</li>
-      <li><strong>Não existe &ldquo;pontos&rdquo; no Tiro Defensivo.</strong> Tudo é <strong>segundos</strong> (art. 3.2 e 3.3).</li>
+      <li><strong>Treina tempo e ordem, não pontaria.</strong> O passthrough não resolve miras.</li>
+      <li><strong>Nada sai do aparelho.</strong> Sem servidor, sem rede.</li>
+      <li><strong>Tudo é segundos</strong>, não pontos (art. 3.2).</li>
     </ul>
+
+    <div class="controles-resumo">
+      <h2 class="sub">Os controles dentro dos óculos</h2>
+      <ul class="controles-lista">
+        <li><b>GATILHO</b> atirar</li>
+        <li><b>A / X</b> começar</li>
+        <li><b>B / Y</b> parar</li>
+        <li><b>segure B / Y</b> sair</li>
+        <li><b>APERTO</b> recarregar</li>
+        <li><b>MANCHE</b> recentrar</li>
+      </ul>
+      <p class="nota">Essa mesma barra fica fixa no rodapé do painel, dentro da sessão.</p>
+    </div>
 
     <p class="rodape-cartao">
       <button type="button" id="btn-aviso-rever" class="botao botao--texto">rever o aviso do art. 4.3</button>
@@ -775,6 +802,49 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
       <button type="button" id="btn-calibrar" class="botao">Calibrar cano (dentro do XR)</button>
     </div>
     <p id="cano-nota" class="nota"></p>
+  </section>
+
+  <!-- ===== 8b. MUNIÇÃO E RECARGA ========================================= -->
+  <section class="cartao" id="cartao-municao">
+    <h2 class="cartao__titulo"><span class="cartao__num">8b</span> Munição e recarga</h2>
+    <p class="nota">
+      Arma vazia não dispara. A Recarga custa tempo e entra na passagem, como na prova.
+      Dentro dos óculos, <b>segure o APERTO</b> enquanto troca o carregador e solte quando a arma
+      estiver pronta &mdash; o app descobre sozinho se foi Tática ou de Emergência pelo estado da arma
+      (art. 3.8.6.a).
+    </p>
+
+    <label class="opcao"><input type="checkbox" id="chk-municao" checked>
+      contar munição</label>
+
+    <div class="grade grade--imp">
+      <label class="campo campo--estreito">Cartuchos por carregador
+        <input type="number" id="mun-capacidade" min="1" max="50" step="1" value="15"></label>
+      <label class="campo campo--estreito">Carregadores no cinto
+        <input type="number" id="mun-sobressalentes" min="0" max="6" step="1" value="2"></label>
+      <label class="campo">Arma começa
+        <select id="mun-inicio">
+          <option value="municiada">municiada, câmara alimentada</option>
+          <option value="semCarregador">sem carregador inserido</option>
+          <option value="camaraVazia">com carregador, câmara vazia</option>
+        </select></label>
+      <label class="campo">Recarga exigida pela Ficha
+        <select id="mun-recarga">
+          <option value="naoObrigatoria">não obrigatória</option>
+          <option value="obrigatoria">obrigatória (qualquer uma)</option>
+          <option value="tatica">Tática obrigatória</option>
+          <option value="emergencia">de Emergência obrigatória</option>
+        </select></label>
+    </div>
+
+    <p id="mun-resumo" class="nota">&mdash;</p>
+    <p class="nota">
+      Limites do art. 5.1.2: pistola até 2 carregadores sobressalentes, revólver 3, arma longa 1.
+      Os carregadores saem plenos, salvo se a Explicação da Pista disser diferente para o primeiro.
+      O app <b>não vê suas mãos</b>: ele não julga se você pegou o carregador pleno antes de tirar o
+      incompleto. O que ele cobra é o que dá para medir &mdash; arma vazia não atira, a Recarga custa
+      tempo, e Recarga exigida e não feita entre o primeiro e o último disparo é 1 EP (art. 3.8.6.i).
+    </p>
   </section>
 
   <!-- ===== 9. DIÁRIO ====================================================== -->
@@ -2373,6 +2443,19 @@ const Apuracao = {
       }
     }
 
+    /* EPs que não vêm da doutrina: arma vazia no primeiro Alvo do Posto
+       (art. 3.8.3.f) e Recarga exigida pela Ficha e não executada entre o
+       primeiro e o último disparo (art. 3.8.6.g/h/i). */
+    const extras = [].concat(
+      (c && c.epsExtras) || [],
+      (typeof Municao !== 'undefined' && c && c.municao) ? (Municao.avaliar(c.municao, c) || []) : []
+    );
+    for (const ep of extras) {
+      if (!ep) continue;
+      ep.segundos = Apuracao.SEGUNDOS_EP * (ep.qtd || 1);                /* art. 3.3.a */
+      res.eps.push(ep);
+    }
+
     /* --- 6. art. 3.4.4.c — engajar de local não previsto descarta os melhores
        impactos nos Alvos envolvidos, em quantidade igual aos disparos feitos
        erroneamente. --------------------------------------------------------- */
@@ -2627,8 +2710,25 @@ const Metricas = {
   },
 
   /* Direção para onde o cano aponta, no mundo. */
+  /* O eixo do CANO no referencial do controle. Não é sempre −Z: o perfil de
+     empunhadura de pistola inclina o cano ~45° abaixo do eixo do cabo do
+     controle (ver §7). Medir overswing e antecipação no eixo do controle em vez
+     do eixo do cano encolheria os dois pelo cosseno da inclinação. */
+  eixoAtual: null,
+
+  eixoDoCano(pista) {
+    const pf = pista && pista.cfg && pista.cfg.perfilCano;
+    const d = pf && pf.direcao;
+    if (d && isFinite(d.x) && isFinite(d.y) && isFinite(d.z) &&
+        (d.x || d.y || d.z)) return M.norm(d);
+    if (typeof Cano !== 'undefined' && Cano && Cano.PERFIL_SINTETICO) {
+      return M.norm(Cano.PERFIL_SINTETICO.direcao);
+    }
+    return Metricas.EIXO_CANO;
+  },
+
   direcaoDoCano(quat) {
-    return M.norm(M.rot(quat || Metricas.QUAT_ID, Metricas.EIXO_CANO));
+    return M.norm(M.rot(quat || Metricas.QUAT_ID, Metricas.eixoAtual || Metricas.EIXO_CANO));
   },
 
   /* Pitch (elevação) do cano em graus: POSITIVO = cano acima do horizonte,
@@ -2978,6 +3078,7 @@ const Metricas = {
      FICA FORA do total comparável — a distância caminhada encolheu, os ângulos
      não (§3 do PLANO). */
   deslocamentos(corrida, pista) {
+    Metricas.eixoAtual = Metricas.eixoDoCano(pista);
     const c = corrida || {};
     const base = Metricas.base(c);
     const trilha = Metricas.ordenar(c.trilha);
@@ -3075,6 +3176,7 @@ const Metricas = {
   /* ---- métricas da passagem ---------------------------------------------- */
 
   calcular(corrida, pista) {
+    Metricas.eixoAtual = Metricas.eixoDoCano(pista);
     const c = corrida || {};
     const p = pista || c.pista || null;
     const base = Metricas.base(c);
@@ -3167,6 +3269,7 @@ const Metricas = {
      aparece com dur 0, que é a informação que interessa. Todos os instantes em
      segundos desde o Bip. */
   segmentar(corrida, pista) {
+    Metricas.eixoAtual = Metricas.eixoDoCano(pista);
     const c = corrida || {};
     const p = pista || c.pista || null;
     const base = Metricas.base(c);
@@ -3872,10 +3975,52 @@ const Cano = {
 
   /* Perfil de emergência: o controle na mão vira "cano" apontando para −Z,
      com a boca 10 cm à frente do grip. Serve para treinar antes de calibrar. */
+  /* O `gripSpace` do WebXR tem o −Z ao longo do CABO do controle, saindo pelo
+     topo. Usar ele cru faz o cano apontar de baixo para cima, como uma lanterna
+     — não como uma arma. O Touch do Quest já tem punho e gatilho: empunhado
+     como pistola, o cano sai à frente, uns 45° abaixo do eixo do cabo.
+     Por isso o perfil padrão é o cabo INCLINADO, e o ângulo é ajustável ao
+     vivo dentro dos óculos, porque cada mão empunha de um jeito. */
+  INCLINACAO_PADRAO: -45,
+
+  /* direção no referencial do grip para uma inclinação em graus: girar (0,0,−1)
+     em torno de X por θ dá (0, sen θ, −cos θ). θ negativo abaixa o cano. */
+  direcaoDeInclinacao(graus) {
+    const r = (Cano.ehNum(graus) ? graus : Cano.INCLINACAO_PADRAO) * Math.PI / 180;
+    return { x: 0, y: Math.sin(r), z: -Math.cos(r) };
+  },
+
+  PRESETS: {
+    pistola: { nome: 'Pistola', inclinacao: -45, origem: { x: 0, y: -0.02, z: -0.06 },
+               dica: 'empunhadura de pistola: cano à frente, seguindo o ângulo natural do punho' },
+    longa:   { nome: 'Arma longa', inclinacao: -25, origem: { x: 0, y: -0.02, z: -0.14 },
+               dica: 'carabina/fuzil: cano mais alinhado com o antebraço e mais à frente' },
+    cabo:    { nome: 'Eixo do cabo (cru)', inclinacao: 0, origem: { x: 0, y: 0, z: -0.10 },
+               dica: 'o −Z do gripSpace sem correção — aponta para cima, serve só de referência' }
+  },
+
+  /* Monta um perfil a partir de um preset, com inclinação opcionalmente
+     ajustada pelo Atleta dentro dos óculos. */
+  perfilDePreset(nome, inclinacao) {
+    const p = Cano.PRESETS[nome] || Cano.PRESETS.pistola;
+    const ang = Cano.ehNum(inclinacao) ? inclinacao : p.inclinacao;
+    return {
+      nome: p.nome + ' (' + ang.toFixed(0) + '°)',
+      preset: (Cano.PRESETS[nome] ? nome : 'pistola'),
+      inclinacao: ang,
+      origem: { x: p.origem.x, y: p.origem.y, z: p.origem.z },
+      direcao: Cano.direcaoDeInclinacao(ang),
+      residuo: 0, sintetico: true, dica: p.dica
+    };
+  },
+
   PERFIL_SINTETICO: {
-    nome: 'controle na mão',
-    origem: { x: 0, y: 0, z: -0.10 },
-    direcao: { x: 0, y: 0, z: -1 },
+    nome: 'Pistola (−45°)',
+    preset: 'pistola',
+    inclinacao: -45,
+    origem: { x: 0, y: -0.02, z: -0.06 },
+    /* (0, sen(−45°), −cos(−45°)) */
+    direcao: { x: 0, y: -0.7071067811865475, z: -0.7071067811865476 },
     residuo: 0,
     sintetico: true
   },
@@ -6075,6 +6220,9 @@ const Corrida = {
       pistaId: Corrida.idDaPista(p),
       pistaNome: Corrida.nomeDaPista(p),
       quando: new Date().toISOString(),
+      /* art. 3.8.6 / 5.1.2 — arma vazia não dispara, e a Recarga custa tempo. */
+      municao: (typeof Municao !== 'undefined')
+        ? Municao.criar((c && c.municao) || {}, p) : null,
       cfg: c,
       k: (p && Corrida.ehNum(p.k)) ? p.k : 1,
       escala: c.escala || 'real',
@@ -6428,6 +6576,62 @@ const Corrida = {
   /* Registra um disparo e o apura AO VIVO. `tMs` é performance.now() (o mesmo
      relógio da amostragem); `pose` é opcional — sem ela, buscamos no buffer do
      Detector e, na falta dele, interpolamos na trilha. */
+  /* Porta de munição na frente do disparo. Devolve
+     {ok, disparo, motivo, txt} — a XR usa isto, e quem não usa munição
+     continua chamando `Corrida.disparo` direto. art. 3.8.6 / 3.8.3.f. */
+  tentarDisparo(corrida, tMs, pose, fonte) {
+    const m = corrida && corrida.municao;
+    if (!m || !m.ativo || typeof Municao === 'undefined') {
+      return { ok: true, disparo: Corrida.disparo(corrida, tMs, pose, fonte) };
+    }
+    if (m.recargaEmCurso) {
+      return { ok: false, motivo: 'recarregando', txt: 'Recarga em curso — solte o APERTO primeiro.' };
+    }
+    const r = Municao.disparar(m, Corrida.seg(corrida, tMs));
+    if (!r.ok) {
+      /* art. 3.8.3.f — tentar engajar o PRIMEIRO Alvo de um Posto com a arma
+         visivelmente vazia (ferrolho aberto e carregador vazio) leva 1 EP. */
+      const primeiro = !(corrida.disparos || []).some(d => d.posto === corrida.postoCorrente);
+      if (primeiro && r.ferrolhoAberto && corrida.estado === 'correndo') {
+        corrida.epsExtras = corrida.epsExtras || [];
+        if (!corrida.epsExtras.some(e => e.id === 'armaVazia' && e.posto === corrida.postoCorrente)) {
+          corrida.epsExtras.push({
+            id: 'armaVazia', posto: corrida.postoCorrente, qtd: 1,
+            txt: 'Tentou engajar o primeiro Alvo do Posto ' + (corrida.postoCorrente || '?') +
+                 ' com a arma visivelmente vazia.',
+            fonte: 'art. 3.8.3.f'
+          });
+        }
+      }
+      return { ok: false, motivo: r.motivo,
+               txt: r.motivo === 'semCarregador'
+                 ? 'Arma SEM CARREGADOR — segure o APERTO para remuniciar.'
+                 : 'Arma VAZIA — segure o APERTO para a Recarga de Emergência.' };
+    }
+    return { ok: true, disparo: Corrida.disparo(corrida, tMs, pose, fonte) };
+  },
+
+  iniciarRecarga(corrida, tMs) {
+    const m = corrida && corrida.municao;
+    if (!m || typeof Municao === 'undefined') return { ok: false, motivo: 'semMunicao' };
+    const r = Municao.iniciarRecarga(m, Corrida.seg(corrida, tMs));
+    if (r.ok) Corrida.registrarEvento(corrida, tMs, 'recarga', 'início da Recarga ' +
+      (r.tipo === 'tatica' ? 'Tática' : (r.tipo === 'fecharFerrolho' ? '(fechar ferrolho)' : 'de Emergência')));
+    return r;
+  },
+
+  concluirRecarga(corrida, tMs) {
+    const m = corrida && corrida.municao;
+    if (!m || typeof Municao === 'undefined') return { ok: false, motivo: 'semMunicao' };
+    const r = Municao.concluirRecarga(m, Corrida.seg(corrida, tMs));
+    if (r.ok && r.recarga) {
+      Corrida.registrarEvento(corrida, tMs, 'recarga',
+        (r.recarga.tipo === 'tatica' ? 'Recarga Tática' : 'Recarga de Emergência') +
+        ' em ' + r.recarga.duracao.toFixed(2) + ' s');
+    }
+    return r;
+  },
+
   disparo(corrida, tMs, pose, fonte) {
     const c = corrida;
     if (!c) return null;
@@ -6900,6 +7104,275 @@ const Corrida = {
 
   /* Contexto de áudio do Bip, criado sob demanda no primeiro gesto. */
   _audio: null
+};
+
+
+/* ========================= 17-municao.js ========================= */
+/* ===========================================================================
+   §17. MUNIÇÃO E RECARGA — art. 3.8.6 e art. 5.1.2
+
+   Contar munição não é enfeite: é o que faz o Atleta PLANEJAR a passagem. A
+   Pista "Sem o carregador!" começa com a arma sem carregador inserido — a
+   primeira ação da corrida é remuniciar, e é por isso que o TPD dela é 4 s e
+   não 3 s. Sem este módulo, o app deixaria atirar de arma vazia.
+
+   Os dois tipos de Recarga (art. 3.8.6.a):
+
+   1. RECARGA DE EMERGÊNCIA — carregador E câmara vazios. O Atleta pode começar
+      tirando o carregador vazio ou apanhando o pleno; o ideal (não obrigatório)
+      é fazer as duas coisas ao mesmo tempo. Carregador vazio pode ser
+      abandonado.
+
+   2. RECARGA TÁTICA — ainda há munição na câmara (ferrolho fechado) e
+      possivelmente no carregador. A ÚNICA maneira correta é acessar primeiro o
+      carregador pleno e só então retirar o incompleto, ficando o mínimo de
+      tempo só com o cartucho da câmara. O carregador retirado TEM que
+      continuar com o Atleta. Fazer ao contrário (a "anti-tática") não gera EP,
+      mas também não conta como Tática.
+
+   O QUE ESTE MÓDULO NÃO JULGA, e diz isso na tela: ele não vê suas mãos. Não
+   dá para saber se você pegou o carregador pleno antes de tirar o incompleto,
+   nem se guardou o retirado. O que ele mede é o ESTADO da arma (que decide qual
+   Recarga é), o TEMPO que a Recarga custou, e as consequências que o
+   Regulamento amarra — arma vazia não dispara, Recarga exigida e não feita é
+   EP, e Recarga fora da janela do primeiro ao último disparo não conta.
+   ======================================================================== */
+
+const Municao = {
+
+  /* art. 5.1.2.c/d — quantos carregadores sobressalentes o cinto comporta */
+  LIMITES: { pistola: 2, revolver: 3, longa: 1 },
+
+  PADRAO: {
+    ativo: true,
+    capacidade: 15,
+    sobressalentes: 2,
+    primeiroCarregador: null,        // null = pleno (art. 5.1.2.a)
+    condicaoInicial: 'municiada',    // 'municiada' | 'semCarregador' | 'camaraVazia'
+    recargaExigida: 'naoObrigatoria' // 'tatica' | 'emergencia' | 'obrigatoria' | 'naoObrigatoria'
+  },
+
+  ROTULO_RECARGA: {
+    tatica: 'Recarga Tática obrigatória',
+    emergencia: 'Recarga de Emergência obrigatória',
+    obrigatoria: 'Recarga obrigatória (Tática ou de Emergência)',
+    naoObrigatoria: 'Recarga não obrigatória'
+  },
+
+  /* Lê da Ficha o que dá para ler; o resto vem do formulário. art. 3.8.6.h */
+  daFicha(pista) {
+    const c = {};
+    if (!pista) return c;
+    const p = pista.parametros || (pista.raw && pista.raw.parametros) || {};
+    const ini = (pista.raw && pista.raw.inicio) || pista.inicio || {};
+    const arma = (pista.cfg && pista.cfg.arma) || 'pistola';
+    const texto = String((arma === 'longa' ? ini.longa : ini.curta) || '');
+
+    if (/sem\s+carregador/i.test(texto)) c.condicaoInicial = 'semCarregador';
+    else if (/c[âa]mara\s+vazia|desmuniciad/i.test(texto)) c.condicaoInicial = 'camaraVazia';
+    else c.condicaoInicial = 'municiada';
+
+    const tipo = String(p.tipoDeRecarga || '').toLowerCase();
+    if (/t[áa]tic/.test(tipo)) c.recargaExigida = 'tatica';
+    else if (/emerg/.test(tipo)) c.recargaExigida = 'emergencia';
+    else if (p.recargaObrigatoria === true) c.recargaExigida = 'obrigatoria';
+    else c.recargaExigida = 'naoObrigatoria';
+
+    c.sobressalentes = Municao.LIMITES[arma === 'revolver' ? 'revolver' : (arma === 'longa' ? 'longa' : 'pistola')];
+    c.arma = arma;
+    return c;
+  },
+
+  criar(cfg, pista) {
+    const c = Object.assign({}, Municao.PADRAO, Municao.daFicha(pista), cfg || {});
+    const cap = Math.max(1, Math.round(Municao.num(c.capacidade, 15)));
+    const arma = c.arma || 'pistola';
+    const teto = Municao.LIMITES[arma === 'revolver' ? 'revolver' : (arma === 'longa' ? 'longa' : 'pistola')];
+    const spare = Math.max(0, Math.round(Municao.num(c.sobressalentes, teto)));
+
+    const avisos = [];
+    if (spare > teto) {
+      avisos.push({ nivel: 'alerta', art: 'art. 5.1.2.c/d',
+        txt: `${spare} carregadores sobressalentes para ${arma}: o Regulamento admite ${teto}.` });
+    }
+
+    /* Primeiro carregador pode sair parcial se a Explicação da Pista mandar
+       (art. 5.1.2.a); fora isso, todos plenos. */
+    const primeiro = (c.primeiroCarregador == null) ? cap
+      : Math.max(0, Math.min(cap, Math.round(Municao.num(c.primeiroCarregador, cap))));
+
+    const e = {
+      ativo: c.ativo !== false,
+      capacidade: cap, arma, recargaExigida: c.recargaExigida || 'naoObrigatoria',
+      condicaoInicial: c.condicaoInicial || 'municiada',
+      cinto: [], retidos: [], recargas: [], avisos,
+      naArma: null, naCamara: false, ferrolhoAberto: false,
+      recargaEmCurso: null, disparos: 0, tentativasVazio: 0
+    };
+    for (let i = 0; i < spare; i++) e.cinto.push(cap);
+
+    if (e.condicaoInicial === 'semCarregador') {
+      /* A arma inicia SEM carregador inserido — remuniciar é a primeira ação. */
+      e.naArma = null; e.naCamara = false; e.ferrolhoAberto = false;
+      e.cinto.unshift(primeiro);
+    } else if (e.condicaoInicial === 'camaraVazia') {
+      e.naArma = primeiro; e.naCamara = false; e.ferrolhoAberto = true;
+    } else {
+      e.naArma = Math.max(0, primeiro - 1); e.naCamara = primeiro > 0;
+      e.ferrolhoAberto = false;
+    }
+    return e;
+  },
+
+  num(v, p) { const n = parseFloat(v); return isFinite(n) ? n : p; },
+
+  total(e) {
+    if (!e) return 0;
+    return (e.naCamara ? 1 : 0) + (e.naArma || 0) +
+           e.cinto.reduce((s, n) => s + n, 0) + e.retidos.reduce((s, n) => s + n, 0);
+  },
+
+  /* Só dispara com cartucho na câmara. É o que impede o app de deixar o Atleta
+     "atirar" de arma vazia e falsear o tempo da passagem. */
+  podeDisparar(e) { return !e || !e.ativo ? true : !!e.naCamara; },
+
+  disparar(e, t) {
+    if (!e || !e.ativo) return { ok: true, simulado: false };
+    if (e.recargaEmCurso) return { ok: false, motivo: 'recarregando' };
+    if (!e.naCamara) {
+      e.tentativasVazio++;
+      return { ok: false, motivo: e.naArma == null ? 'semCarregador' : 'vazia',
+               ferrolhoAberto: e.ferrolhoAberto };
+    }
+    e.naCamara = false; e.disparos++;
+    if (e.naArma != null && e.naArma > 0) { e.naArma--; e.naCamara = true; }
+    else { e.ferrolhoAberto = true; }          // ferrolho abre no último tiro
+    return { ok: true, restante: Municao.total(e), t };
+  },
+
+  /* Qual Recarga o ESTADO DA ARMA caracteriza, agora (art. 3.8.6.a). */
+  tipoDeRecarga(e) {
+    if (!e) return null;
+    if (e.naArma == null) return 'emergencia';                 // sem carregador inserido
+    if (e.naCamara) return 'tatica';                           // ferrolho fechado, cartucho na câmara
+    if (e.ferrolhoAberto && e.naArma > 0) return 'fecharFerrolho';
+    return 'emergencia';
+  },
+
+  iniciarRecarga(e, t) {
+    if (!e || !e.ativo) return { ok: false, motivo: 'inativo' };
+    if (e.recargaEmCurso) return { ok: false, motivo: 'jaEmCurso' };
+    if (!e.cinto.length) {
+      return { ok: false, motivo: 'semCarregadorNoCinto',
+               txt: 'Acabaram os carregadores do cinto.' };
+    }
+    const tipo = Municao.tipoDeRecarga(e);
+    e.recargaEmCurso = { tipo, t0: t, naArmaAntes: e.naArma, naCamaraAntes: e.naCamara };
+    return { ok: true, tipo, t };
+  },
+
+  concluirRecarga(e, t) {
+    if (!e || !e.recargaEmCurso) return { ok: false, motivo: 'nenhumaEmCurso' };
+    const r = e.recargaEmCurso;
+    e.recargaEmCurso = null;
+    const dur = Math.max(0, t - r.t0);
+
+    /* art. 3.8.6.a.2 — com o ferrolho aberto e munição no carregador, não
+       adianta iniciar uma Tática: primeiro fecha o ferrolho. */
+    if (r.tipo === 'fecharFerrolho') {
+      e.ferrolhoAberto = false;
+      if (e.naArma > 0) { e.naArma--; e.naCamara = true; }
+      const reg = { tipo: 'fecharFerrolho', t0: r.t0, t, duracao: dur, valida: false,
+                    txt: 'Ferrolho fechado e câmara alimentada. Agora dá para fazer a Tática.' };
+      e.recargas.push(reg);
+      return { ok: true, recarga: reg };
+    }
+
+    const pleno = e.cinto.shift();
+    if (pleno == null) {
+      return { ok: false, motivo: 'semCarregadorNoCinto', txt: 'Acabaram os carregadores do cinto.' };
+    }
+
+    let reg;
+    if (r.tipo === 'tatica') {
+      /* O carregador incompleto SAI da arma e continua com o Atleta
+         (art. 3.8.6.a.2). O cartucho da câmara permanece. */
+      if (r.naArmaAntes != null) e.retidos.push(r.naArmaAntes);
+      e.naArma = pleno; e.ferrolhoAberto = false;
+      reg = { tipo: 'tatica', t0: r.t0, t, duracao: dur, valida: true,
+              retido: r.naArmaAntes || 0,
+              txt: 'Recarga Tática. O carregador retirado continua com você (art. 3.8.6.a.2).' };
+    } else {
+      /* Emergência: carregador vazio pode ser abandonado (art. 3.8.6.b só veda
+         abandonar carregador COM munição). Alimenta a câmara. */
+      e.naArma = Math.max(0, pleno - 1); e.naCamara = pleno > 0; e.ferrolhoAberto = false;
+      reg = { tipo: 'emergencia', t0: r.t0, t, duracao: dur, valida: true,
+              txt: 'Recarga de Emergência.' };
+    }
+    e.recargas.push(reg);
+    return { ok: true, recarga: reg };
+  },
+
+  cancelarRecarga(e) { if (e) e.recargaEmCurso = null; },
+
+  /* art. 3.8.6.g — a Recarga exigida vale só entre o primeiro e o último
+     disparo. art. 3.8.6.h/i — não cumprir a exigência da Ficha é 1 EP. */
+  avaliar(e, corrida) {
+    const eps = [];
+    if (!e || !e.ativo) return eps;
+    const exig = e.recargaExigida || 'naoObrigatoria';
+    if (exig === 'naoObrigatoria') return eps;
+
+    const disparos = (corrida && corrida.disparos) || [];
+    if (disparos.length < 1) return eps;
+    const t0 = disparos[0].t, t1 = disparos[disparos.length - 1].t;
+    const naJanela = e.recargas.filter(r => r.valida && r.t >= t0 - 1e-9 && r.t <= t1 + 1e-9);
+
+    const temTatica = naJanela.some(r => r.tipo === 'tatica');
+    const temEmerg = naJanela.some(r => r.tipo === 'emergencia');
+    const cumpriu = exig === 'tatica' ? temTatica
+                  : (exig === 'emergencia' ? temEmerg : (temTatica || temEmerg));
+
+    if (!cumpriu) {
+      eps.push({
+        id: 'recargaNaoRealizada', posto: null, qtd: 1,
+        txt: `${Municao.ROTULO_RECARGA[exig]}: não foi executada entre o primeiro e o último disparo.`,
+        fonte: 'art. 3.8.6.g/h/i'
+      });
+    }
+    return eps;
+  },
+
+  /* Resumo para o painel e para a tela inicial. */
+  resumo(e) {
+    if (!e || !e.ativo) return { texto: 'munição desligada', ativo: false };
+    const camara = e.naCamara ? 1 : 0;
+    const arma = e.naArma == null ? null : e.naArma;
+    return {
+      ativo: true,
+      naCamara: e.naCamara, naArma: arma, cinto: e.cinto.length,
+      capacidade: e.capacidade, total: Municao.total(e),
+      ferrolhoAberto: e.ferrolhoAberto,
+      recarregando: !!e.recargaEmCurso,
+      tipoEmCurso: e.recargaEmCurso ? e.recargaEmCurso.tipo : null,
+      /* "12+1" é como o atirador lê: carregador + câmara */
+      texto: arma == null ? 'SEM CARREGADOR' : (arma + '+' + camara),
+      cintoTexto: e.cinto.length + (e.cinto.length === 1 ? ' carregador' : ' carregadores')
+    };
+  },
+
+  /* Texto curto de instrução, para a barra de controles. */
+  instrucao(e) {
+    if (!e || !e.ativo) return '';
+    if (e.recargaEmCurso) {
+      return e.recargaEmCurso.tipo === 'tatica'
+        ? 'RECARGA TÁTICA — solte o aperto quando o carregador pleno estiver inserido'
+        : 'RECARGA DE EMERGÊNCIA — solte o aperto quando a arma estiver pronta';
+    }
+    if (e.naArma == null) return 'ARMA SEM CARREGADOR — segure o APERTO para remuniciar';
+    if (!e.naCamara) return 'ARMA VAZIA — segure o APERTO para a Recarga de Emergência';
+    return '';
+  }
 };
 
 
@@ -10714,6 +11187,57 @@ const XR = {
   /* O que o Painel (parte 11) consome. No modo 'corrida' é exatamente o que
      `Corrida.aoVivo` devolve, mais k e a medida do cômodo, que são deste
      módulo. */
+  /* ---------------------------------------------------------------------
+     RECARGA — art. 3.8.6. O APERTO é o único controle: segure enquanto troca o
+     carregador, solte quando a arma estiver pronta. Qual Recarga foi, a
+     Emergência ou a Tática, sai do ESTADO DA ARMA, não de um menu.
+     ------------------------------------------------------------------ */
+  recarregarInicio(tMs) {
+    const e = XR.estado;
+    if (e.calibrando) return;
+    if (!XR.corrida || typeof Corrida.iniciarRecarga !== 'function') return;
+    const r = Corrida.iniciarRecarga(XR.corrida, tMs);
+    if (!r || r.ok === false) {
+      XR.aviso((r && r.txt) || 'Não dá para recarregar agora.', 'alerta');
+      return;
+    }
+    e.recarregando = true;
+    XR.aviso(r.tipo === 'tatica'
+      ? 'Recarga TÁTICA — pegue o carregador pleno ANTES de tirar o incompleto (art. 3.8.6.a.2).'
+      : 'Recarga de EMERGÊNCIA — carregador e câmara vazios (art. 3.8.6.a.1).');
+  },
+
+  recarregarFim(tMs) {
+    const e = XR.estado;
+    e.recarregando = false;
+    if (!XR.corrida || typeof Corrida.concluirRecarga !== 'function') return;
+    const r = Corrida.concluirRecarga(XR.corrida, tMs);
+    if (r && r.ok && r.recarga) {
+      XR.aviso(r.recarga.txt + ' ' + r.recarga.duracao.toFixed(2).replace('.', ',') + ' s.', 'ok');
+    } else if (r && r.txt) {
+      XR.aviso(r.txt, 'alerta');
+    }
+  },
+
+  /* O que a barra de baixo mostra. Fica leve de propósito: roda a 24 Hz. */
+  estadoDoHUD() {
+    const e = XR.estado;
+    const mun = (XR.corrida && XR.corrida.municao) ? Municao.resumo(XR.corrida.municao) : null;
+    let instrucao = '', nivel = 'alerta';
+    if (e.calibrando) { instrucao = 'CALIBRANDO O CANO — gatilho colhe amostra, B/Y encerra'; }
+    else if (XR.corrida && XR.corrida.municao) { instrucao = Municao.instrucao(XR.corrida.municao); }
+    if (!instrucao && XR.corrida) {
+      if (XR.corrida.estado === 'pronta') { instrucao = 'APERTE A / X PARA COMEÇAR'; nivel = 'ok'; }
+      else if (XR.corrida.estado === 'aguardando') { instrucao = 'PRONTO… espere o BIP'; nivel = 'ok'; }
+      else if (XR.corrida.estado === 'terminada') { instrucao = 'PASSAGEM ENCERRADA — A / X recomeça'; nivel = 'ok'; }
+    }
+    return {
+      municao: mun, instrucao, instrucaoNivel: nivel,
+      estadoTexto: 'escala ' + (e.escala || 'real') + ' · k = ' + (XR.num(e.k, 1)).toFixed(3),
+      destaque: e.recarregando ? 'RECARREGAR' : null
+    };
+  },
+
   estadoDoPainel() {
     const base = XR.corrida ? Corrida.aoVivo(XR.corrida) : { t: 0, nDisparos: 0, disparos: [] };
     const e = XR.estado;
@@ -10844,16 +11368,31 @@ const XR = {
       if (e.escala === 'estatico') XR.avancarPosto();
       else XR.armar();
     }
+    /* B/Y curto PARA a passagem; B/Y segurado 1,5 s SAI da realidade mista.
+       Sem isso não havia como voltar sem tirar os óculos. */
     if (XR.borda('by', ent.botao.by)) {
+      e.byDesde = tMs;
+      e.bySaiu = false;
+    }
+    if (ent.botao.by && e.byDesde && !e.bySaiu && (tMs - e.byDesde) >= 1500) {
+      e.bySaiu = true;
+      XR.aviso('Saindo da realidade mista…');
+      XR.sair();
+      return;
+    }
+    if (!ent.botao.by && e.byDesde && !e.bySaiu) {
+      e.byDesde = 0;
       if (e.calibrando) XR.encerrarCalibracao();
       else XR.encerrar();
     }
-    if (XR.borda('grip', ent.botao.grip)) {
-      e.tracado = !e.tracado;
-      if (XR.tracadoObj) XR.tracadoObj.objeto.visible = e.tracado;
-      XR.etiqueta && XR.etiqueta.atualizar();
-      XR.aviso('Traçado do cano ' + (e.tracado ? 'LIGADO — é auxílio de diagnóstico, não mira.' : 'desligado.'));
-    }
+    if (!ent.botao.by) { e.byDesde = 0; e.bySaiu = false; }
+
+    /* APERTO = RECARREGAR. Segure enquanto troca o carregador; solte quando a
+       arma estiver pronta. O tipo de Recarga sai do ESTADO da arma
+       (art. 3.8.6.a), e o tempo gasto entra na passagem. */
+    if (XR.borda('grip', ent.botao.grip)) XR.recarregarInicio(tMs);
+    if (!ent.botao.grip && e.recarregando) XR.recarregarFim(tMs);
+
     if (XR.borda('manche', ent.botao.manche)) XR.recentrar(true);
 
     /* 5. gatilho — art. 3.4.4.a: o Alvo é ENGAJADO pelo disparo na direção
@@ -10868,8 +11407,13 @@ const XR = {
     if (disparou) {
       if (e.calibrando) XR.colherAmostraPivo(ent);
       else if (XR.corrida) {
-        const d = Corrida.disparo(XR.corrida, tMs, pose, 'gatilho');
-        if (d) XR.marcarImpacto(d);
+        /* Arma vazia não dispara (art. 3.8.6): o clique do gatilho não pode
+           virar estampido no cronômetro. E tentar engajar o primeiro Alvo do
+           Posto com a arma visivelmente vazia é 1 EP (art. 3.8.3.f). */
+        const tiro = Corrida.tentarDisparo ? Corrida.tentarDisparo(XR.corrida, tMs, pose, 'gatilho')
+                                           : { ok: true, disparo: Corrida.disparo(XR.corrida, tMs, pose, 'gatilho') };
+        if (tiro && tiro.ok && tiro.disparo) XR.marcarImpacto(tiro.disparo);
+        else if (tiro && !tiro.ok) XR.aviso(tiro.txt || 'Arma vazia.', 'alerta');
       }
     }
 
@@ -11046,6 +11590,9 @@ const XR = {
     try {
       if (typeof Painel !== 'undefined' && Painel && typeof Painel.criar === 'function') {
         XR.painel = Painel.criar(THREE, { cfg, pista: c.pista, largura: 0.62, distancia: 1.15 });
+        /* Barra de controles no rodapé: dentro dos óculos ninguém lembra qual
+           botão faz o quê, e não havia como sair da Pista. */
+        if (typeof HUD !== 'undefined' && HUD && XR.painel) HUD.instalar(XR.painel, XR.estadoDoHUD);
         if (XR.painel && XR.painel.objeto) XR.cena.add(XR.painel.objeto);
       }
     } catch (e) { XR.painel = null; XR.aviso('Painel indisponível: ' + e, 'erro'); }
@@ -11203,6 +11750,148 @@ const XR = {
     XR.estagio = null; XR.painel = null; XR.etiqueta = null; XR.tracadoObj = null;
     XR.refSpace = null; XR.espacoLimitado = null;
     XR.THREE = null;
+  }
+};
+
+
+/* ========================= 18-hud.js ========================= */
+/* ===========================================================================
+   §18. HUD — a barra de baixo do painel
+
+   Dentro dos óculos ninguém lembra qual botão faz o quê. A barra fica SEMPRE
+   visível, no rodapé do painel, dizendo em uma linha o que cada controle faz,
+   quanta munição resta e o que o app está esperando você fazer agora.
+
+   Ela é desenhada POR CIMA do painel, sem mexer no layout dele: `instalar`
+   embrulha `desenhar` e `atualizar` e repinta o rodapé depois.
+   ======================================================================== */
+
+const HUD = {
+
+  ALTURA: 132,        // px do rodapé no canvas 1024×768 do painel
+
+  CORES: {
+    fundo: 'rgba(6,10,13,.94)', borda: '#1b2830',
+    tecla: '#00d4ff', texto: '#c8d8e2', apagado: '#6a7f8c',
+    verde: '#2ecc71', ambar: '#ffb020', vermelho: '#e11d2a', branco: '#eaf4f9'
+  },
+
+  /* Um controle, uma frase. Nada de manual. */
+  CONTROLES: [
+    { tecla: 'GATILHO', acao: 'ATIRAR' },
+    { tecla: 'A / X', acao: 'COMEÇAR' },
+    { tecla: 'B / Y', acao: 'PARAR' },
+    { tecla: 'segure B / Y', acao: 'SAIR' },
+    { tecla: 'APERTO', acao: 'RECARREGAR' },
+    { tecla: 'MANCHE', acao: 'RECENTRAR' }
+  ],
+
+  /* Instala o rodapé num painel já criado. Devolve o mesmo painel. */
+  instalar(painel, obter) {
+    if (!painel || !painel.ctx || painel.__hud) return painel;
+    painel.__hud = true;
+    const desenharOriginal = painel.desenhar;
+    const atualizarOriginal = painel.atualizar;
+
+    const pintar = () => {
+      try {
+        const dados = (typeof obter === 'function') ? (obter() || {}) : {};
+        HUD.desenhar(painel.ctx, painel.canvas, dados);
+        if (painel.textura) painel.textura.needsUpdate = true;
+      } catch (e) { /* o rodapé nunca pode derrubar o painel */ }
+    };
+
+    painel.desenhar = function () { desenharOriginal.call(painel); pintar(); };
+    painel.atualizar = function (novo) { atualizarOriginal.call(painel, novo); pintar(); };
+    painel.desenhar();
+    return painel;
+  },
+
+  desenhar(g, canvas, d) {
+    const C = HUD.CORES;
+    const W = canvas.width, H = canvas.height;
+    const y0 = H - HUD.ALTURA;
+    const mono = '"SF Mono", ui-monospace, Menlo, Consolas, monospace';
+    const sans = '-apple-system, system-ui, "Segoe UI", sans-serif';
+
+    g.save();
+    g.fillStyle = C.fundo;
+    g.fillRect(0, y0, W, HUD.ALTURA);
+    g.strokeStyle = C.borda; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, y0 + 1); g.lineTo(W, y0 + 1); g.stroke();
+
+    /* ---- linha 1: munição e o que o app espera --------------------------- */
+    const mun = d.municao;
+    let x = 26;
+    const linha1 = y0 + 40;
+
+    if (mun && mun.ativo) {
+      g.textBaseline = 'middle';
+      g.font = '600 15px ' + sans;
+      g.fillStyle = C.apagado;
+      g.fillText('MUNIÇÃO', x, linha1 - 15);
+
+      const vazia = mun.naArma == null || (!mun.naCamara && !mun.naArma);
+      g.font = '800 38px ' + mono;
+      g.fillStyle = mun.recarregando ? C.ambar : (vazia ? C.vermelho : C.branco);
+      g.fillText(mun.texto, x, linha1 + 14);
+      const larg = g.measureText(mun.texto).width;
+
+      g.font = '500 16px ' + sans;
+      g.fillStyle = C.apagado;
+      g.fillText('· ' + mun.cintoTexto + ' no cinto', x + larg + 16, linha1 + 14);
+      x += larg + 16 + g.measureText('· ' + mun.cintoTexto + ' no cinto').width + 34;
+    }
+
+    /* A instrução do momento é o texto mais importante da barra. */
+    const inst = d.instrucao || '';
+    if (inst) {
+      g.font = '800 22px ' + sans;
+      g.fillStyle = d.instrucaoNivel === 'ok' ? C.verde
+                  : (d.instrucaoNivel === 'erro' ? C.vermelho : C.ambar);
+      g.textBaseline = 'middle';
+      g.fillText(inst, x, linha1 + 4);
+    } else if (d.estadoTexto) {
+      g.font = '600 20px ' + sans;
+      g.fillStyle = C.apagado;
+      g.textBaseline = 'middle';
+      g.fillText(d.estadoTexto, x, linha1 + 4);
+    }
+
+    /* ---- linha 2: os controles ------------------------------------------ */
+    const linha2 = y0 + 98;
+    const ativos = HUD.CONTROLES.filter(c => {
+      if (c.acao === 'RECARREGAR') return !(mun && mun.ativo === false);
+      return true;
+    });
+
+    /* mede tudo antes, para distribuir sem estourar a largura */
+    g.font = '700 15px ' + mono;
+    const larguras = ativos.map(c => {
+      const t = g.measureText(c.tecla).width;
+      g.font = '700 15px ' + sans;
+      const a = g.measureText(c.acao).width;
+      g.font = '700 15px ' + mono;
+      return t + 12 + a;
+    });
+    const soma = larguras.reduce((s, n) => s + n, 0);
+    const folga = Math.max(14, (W - 52 - soma) / Math.max(1, ativos.length - 1));
+
+    let cx = 26;
+    g.textBaseline = 'middle';
+    for (let i = 0; i < ativos.length; i++) {
+      const c = ativos[i];
+      const destaque = d.destaque === c.acao;
+      g.font = '700 15px ' + mono;
+      g.fillStyle = destaque ? C.branco : C.tecla;
+      g.fillText(c.tecla, cx, linha2);
+      const lt = g.measureText(c.tecla).width;
+      g.font = '700 15px ' + sans;
+      g.fillStyle = destaque ? C.branco : C.apagado;
+      g.fillText(c.acao, cx + lt + 12, linha2);
+      cx += larguras[i] + folga;
+    }
+    g.restore();
   }
 };
 
@@ -11566,6 +12255,7 @@ const UI = {
     UI.estado.fonte = fonte || 'manual';
     UI.estado.alvoPreview = null;
     const p = UI.recarregarPista();
+    if (typeof ConfigMunicao !== 'undefined') { ConfigMunicao.daFicha(); ConfigMunicao.pintar(); }
     if (p) UI.status('Ficha carregada de: ' + UI.estado.fonte + '.', 'ok');
     return p;
   },
@@ -12718,7 +13408,9 @@ const UI = {
       zonasConfirmadas: UI.marcado('chk-zonas'),
       preferirRetanguloTarja: UI.str('sel-tarja', 'cobre') === 'retangulo',
       deteccao: UI.str('sel-deteccao', CFG_PADRAO.deteccao),
-      perfilCano: UI.perfilEscolhido()
+      perfilCano: UI.perfilEscolhido(),
+      /* art. 3.8.6 / 5.1.2 — munição e Recarga entram na passagem */
+      municao: (typeof ConfigMunicao !== 'undefined') ? ConfigMunicao.cfg() : undefined
     });
   }
 };
@@ -13191,6 +13883,84 @@ const Importador = {
     const nome = (s.resultado.pista.meta && s.resultado.pista.meta.nome) || 'pista';
     UI.baixar(nome.replace(/[^\w\-]+/g, '-').toLowerCase() + '.pista.json',
               JSON.stringify(s.resultado.pista, null, 2), 'application/json');
+  }
+};
+
+/* ===========================================================================
+   §16.B — MUNIÇÃO na tela inicial. Fica aqui, junto do importador, para não
+   mexer no arquivo grande da interface.
+   ======================================================================== */
+
+const ConfigMunicao = {
+  el(id) { return document.getElementById(id); },
+
+  iniciar() {
+    if (typeof document === 'undefined') return;
+    const ids = ['chk-municao', 'mun-capacidade', 'mun-sobressalentes', 'mun-inicio', 'mun-recarga'];
+    for (const id of ids) {
+      const e = ConfigMunicao.el(id);
+      if (e) e.addEventListener('change', () => ConfigMunicao.pintar());
+    }
+    ConfigMunicao.daFicha();
+    ConfigMunicao.pintar();
+  },
+
+  /* Puxa da Ficha o que ela já determina: condição de início da arma e se a
+     Recarga é obrigatória (art. 3.8.6.h). */
+  daFicha() {
+    try {
+      const pista = UI && UI.estado && UI.estado.pista;
+      if (!pista || typeof Municao === 'undefined') return;
+      const c = Municao.daFicha(pista);
+      const i = ConfigMunicao.el('mun-inicio');
+      if (i && c.condicaoInicial) i.value = c.condicaoInicial;
+      const r = ConfigMunicao.el('mun-recarga');
+      if (r && c.recargaExigida) r.value = c.recargaExigida;
+      const s = ConfigMunicao.el('mun-sobressalentes');
+      if (s && c.sobressalentes != null) s.value = c.sobressalentes;
+    } catch (e) { /* a Ficha ainda não carregou */ }
+  },
+
+  cfg() {
+    const n = (id, p) => {
+      const e = ConfigMunicao.el(id);
+      const v = e ? parseFloat(e.value) : NaN;
+      return isFinite(v) ? v : p;
+    };
+    const chk = ConfigMunicao.el('chk-municao');
+    const ini = ConfigMunicao.el('mun-inicio'), rec = ConfigMunicao.el('mun-recarga');
+    return {
+      ativo: chk ? !!chk.checked : true,
+      capacidade: n('mun-capacidade', 15),
+      sobressalentes: n('mun-sobressalentes', 2),
+      condicaoInicial: ini ? ini.value : 'municiada',
+      recargaExigida: rec ? rec.value : 'naoObrigatoria'
+    };
+  },
+
+  pintar() {
+    const e = ConfigMunicao.el('mun-resumo');
+    if (!e || typeof Municao === 'undefined') return;
+    const cfg = ConfigMunicao.cfg();
+    if (!cfg.ativo) {
+      e.className = 'nota';
+      e.textContent = 'Contagem de munição desligada: o gatilho sempre dispara.';
+      return;
+    }
+    let est;
+    try {
+      est = Municao.criar(cfg, (UI && UI.estado && UI.estado.pista) || null);
+    } catch (er) { e.textContent = 'configuração inválida'; return; }
+    const r = Municao.resumo(est);
+    const partes = [
+      'começa em ' + r.texto,
+      r.cintoTexto + ' no cinto',
+      Municao.total(est) + ' cartuchos ao todo',
+      Municao.ROTULO_RECARGA[cfg.recargaExigida] || ''
+    ].filter(Boolean);
+    e.className = 'nota' + (est.avisos.length ? ' nota--alerta' : '');
+    e.textContent = partes.join(' · ') +
+      (est.avisos.length ? ' — ' + est.avisos.map(a => a.txt).join(' ') : '');
   }
 };
 
@@ -14636,6 +15406,10 @@ const PISTAXR = {
   carregarPista: (json, cfg) => Pista.carregar(json || FIXTURE, cfg),
   /* Importação da Ficha pela imagem — o caminho de entrada de todo mês. */
   croqui: Croqui,
+  municao: (typeof Municao !== 'undefined') ? Municao : null,
+  hud: (typeof HUD !== 'undefined') ? HUD : null,
+  painel: (typeof Painel !== 'undefined') ? Painel : null,
+  xr: (typeof XR !== 'undefined') ? XR : null,
   importador: (typeof Importador !== 'undefined') ? Importador : null,
   ui: (typeof UI !== 'undefined') ? UI : null
 };
@@ -14657,6 +15431,7 @@ if (typeof window !== 'undefined') {
       UI.iniciar();
       /* O caminho de entrada do mês: a Ficha chega como PNG. */
       Importador.iniciar();
+      ConfigMunicao.iniciar();
     } catch (e) {
       const alvo = document.getElementById('saida') || document.body;
       const p = document.createElement('pre');

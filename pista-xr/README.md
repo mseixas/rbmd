@@ -262,10 +262,55 @@ Resíduo acima de 5 mm → refaça. O perfil fica salvo por arma.
 
 | Controle | Ação |
 |---|---|
-| **Gatilho** | disparo (`buttons[0].value > 0,6`, rearme abaixo de 0,2) |
-| **A / X** | armar a corrida (delay aleatório + Bip) · em modo `estatico`, avançar de Posto |
-| **B / Y** | encerrar a passagem |
-| **Grip** | liga/desliga o traçado do cano |
+| **Gatilho** | **ATIRAR** (`buttons[0].value > 0,6`, rearme abaixo de 0,2) |
+| **A / X** | **COMEÇAR** — arma a corrida (delay aleatório + Bip) · em `estatico`, avança de Posto |
+| **B / Y** | **PARAR** a passagem |
+| **segurar B / Y** 1,5 s | **SAIR** da realidade mista |
+| **Aperto** (grip) | **RECARREGAR** — segure enquanto troca o carregador, solte quando a arma estiver pronta |
+| **Manche** (clique) | **RECENTRAR** a Pista à sua frente |
+
+Essa mesma barra fica fixa no **rodapé do painel**, dentro dos óculos. Ninguém
+lembra qual botão faz o quê com o headset na cabeça.
+
+### A mira do controle
+
+O `gripSpace` do WebXR tem o −Z ao longo do **cabo** do controle, saindo pelo
+topo. Usado cru, o cano aponta de baixo para cima, como uma lanterna. O Touch do
+Quest já tem punho e gatilho: empunhado como pistola, o cano sai **à frente**,
+uns **45° abaixo** do eixo do cabo. É esse o perfil padrão (`Pistola −45°`), e o
+ângulo é ajustável — cada mão empunha de um jeito. Há também um preset de
+**arma longa** (−25°) e o **eixo cru do cabo** (0°), para referência.
+
+### Munição e Recarga *(art. 3.8.6 e 5.1.2)*
+
+Arma vazia **não dispara**. A Recarga custa tempo e entra na passagem, como na
+prova. Configure antes de correr: cartuchos por carregador, quantos carregadores
+no cinto, como a arma começa, e qual Recarga a Ficha exige.
+
+A Pista de exemplo se chama **"Sem o carregador!"** justamente porque a arma
+inicia **sem carregador inserido** — a primeira ação da corrida é remuniciar, e
+é por isso que o TPD dela é 4 s e não 3 s. O app lê isso da Ficha sozinho.
+
+Qual Recarga foi, o app descobre pelo **estado da arma**, não por um menu:
+
+- **Emergência** — carregador e câmara vazios *(art. 3.8.6.a.1)*. Carregador
+  vazio pode ser abandonado.
+- **Tática** — ainda há cartucho na câmara *(art. 3.8.6.a.2)*. O carregador
+  retirado continua com você.
+- **Ferrolho aberto com munição no carregador** — primeiro fecha o ferrolho;
+  só então dá para fazer a Tática.
+
+Limites do art. 5.1.2: pistola até **2** carregadores sobressalentes, revólver
+**3**, arma longa **1**. Os carregadores saem plenos, salvo se a Explicação da
+Pista disser diferente para o primeiro. Se a Ficha exigir Recarga (Tática, de
+Emergência, ou qualquer uma) e ela não for feita **entre o primeiro e o último
+disparo**, é **1 EP** *(art. 3.8.6.g/h/i)*.
+
+**O que o app não julga, e diz isso na tela:** ele não vê suas mãos. Não sabe se
+você pegou o carregador pleno antes de tirar o incompleto — a diferença entre a
+Tática correta e a "anti-tática" do art. 3.8.6.i. O que ele cobra é o que dá
+para medir: arma vazia não atira, a Recarga custa tempo, e Recarga exigida e não
+feita é EP.
 
 Se ligar o **microfone**, o app detecta o estampido do seco por onset acústico
 (passa-alta em 1,8 kHz, limiar `mediana + 8·MAD`, refratário de 120 ms) e
