@@ -391,12 +391,12 @@ O Touch é um controle, não uma arma, e ver um controle flutuando quebra o
 treino. A **Divisão escolhida na tela inicial** vira um modelo 3D por cima do
 controle:
 
-| Divisão | Modelo | Comprimento |
+| Divisão | Modelo | Medidas |
 |---|---|---|
-| Pistola (todas) | ferrolho com janela de ejeção, armação com trilho, punho inclinado 18°, guarda-mato vazado | 24 cm |
-| Revólver | cano de 4 polegadas com trilho ventilado, tambor de seis câmaras, cão exposto, punho de madeira | 23 cm |
-| Carabina (todas) | guarda-mão com trilho, coronha retrátil atrás da mão, carregador curvo, óptica tubular | 67 cm |
-| Fuzil | idem, cano e guarda-mão mais longos | 73 cm |
+| Pistola (todas) | ferrolho com janela de ejeção e miras de três pontos, armação com trilho de acessórios e esporão, guarda-mato vazado, punho a 18°, prato do carregador | 22,3 × 14,3 cm |
+| Revólver | cano de 4″ com trilho ventilado, tambor de seis câmaras, cão exposto, punho de madeira | 23,9 × 14,9 cm |
+| Carabina (todas) | guarda-mão com trilho, coronha retrátil atrás da mão, carregador curvo, óptica tubular | 66,2 × 20,2 cm |
+| Fuzil | idem, cano e guarda-mão mais longos | 71,9 × 20,2 cm |
 
 **Como o modelo é feito.** Não é caixa empilhada: é o **perfil lateral
 extrudado**. A silhueta de uma arma vista de lado é o que a torna reconhecível,
