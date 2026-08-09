@@ -391,26 +391,34 @@ O Touch é um controle, não uma arma, e ver um controle flutuando quebra o
 treino. A **Divisão escolhida na tela inicial** vira um modelo 3D por cima do
 controle:
 
-| Divisão | Modelo | Comprimento aparente |
+| Divisão | Modelo | Comprimento |
 |---|---|---|
-| Pistola (todas) | pistola — ferrolho, punho inclinado, carregador, miras | 24 cm |
-| Revólver | revólver — tambor, cano, punho de madeira | 24 cm |
-| Carabina (todas) | carabina com óptica, coronha atrás da mão | 61 cm |
-| Fuzil | fuzil com óptica | 66 cm |
+| Pistola (todas) | ferrolho com janela de ejeção, armação com trilho, punho inclinado 18°, guarda-mato vazado | 24 cm |
+| Revólver | cano de 4 polegadas com trilho ventilado, tambor de seis câmaras, cão exposto, punho de madeira | 23 cm |
+| Carabina (todas) | guarda-mão com trilho, coronha retrátil atrás da mão, carregador curvo, óptica tubular | 67 cm |
+| Fuzil | idem, cano e guarda-mão mais longos | 73 cm |
 
-Nada de arquivo de modelo: tudo montado com primitivas do three.js. O eixo do
-cano fica sobre **a mesma linha do raio de mira**, então a boca da arma cai
-sobre a linha de tiro — o que você vê é para onde o tiro vai. No disparo a arma
-**recua e levanta**, e volta sozinha.
+**Como o modelo é feito.** Não é caixa empilhada: é o **perfil lateral
+extrudado**. A silhueta de uma arma vista de lado é o que a torna reconhecível,
+e é assim que modelo low-poly de jogo é construído. Cada peça é um polígono no
+plano (z, y) virado sólido por `ExtrudeGeometry` **com bisel** — é o bisel que
+dá o brilho na quina e tira o aspecto de caixa. O **guarda-mato é um furo** do
+polígono da armação: é o vão que faz o olho reconhecer uma arma antes de
+qualquer detalhe.
 
-É uma silhueta de arma, não a *sua* arma: serve de referência de empunhadura e
-de comprimento de cano. Alinhamento fino de aparelho de pontaria continua sendo
-coisa do mundo real.
+**Iluminação e reflexo.** Material metálico sem *environment map* renderiza
+quase preto — metal não tem cor difusa, só devolve o que há em volta. Era essa a
+causa do aspecto chapado. A cena ganhou luz de três pontos (chave, contraluz e
+hemisférica) e a arma reflete um ambiente gerado no próprio app: um degradê
+equirretangular de céu claro para chão escuro, com faixa clara no horizonte e
+uma janela de luz.
 
-Em *Som e comandos* dá para ajustar idioma, sequência (curta ou completa),
-volume, e ligar/desligar som, voz e vibração de forma independente — mais dois
-botões para ouvir o estampido e a sequência antes de entrar. **Nenhum sinal do
-app depende só de som ou de vibração.**
+Nada de arquivo de modelo: continua tudo procedural, num arquivo só. O eixo do
+cano fica sobre **a mesma linha do raio de mira**, então a boca cai sobre a
+linha de tiro. No disparo a arma recua e levanta, e volta sozinha.
+
+É uma silhueta de arma, não a *sua* arma: referência de empunhadura e de
+comprimento de cano.
 
 ### Passagem concluída devolve a munição
 
