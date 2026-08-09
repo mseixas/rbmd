@@ -97,14 +97,18 @@ Do **Anexo I** do Regulamento LNTD 2025, confirmados:
 `480 + 126 + 152 = 758` exatamente, e todo o reduzido é 2/3 do padrão — as duas
 identidades são testes de sanidade da suíte.
 
-**O que NÃO está confirmado:** a **largura lateral da Zona Zero** não é legível
-na cota do Anexo I renderizado. Enquanto você não confirmar essa medida em
-*Ajuste do alvo*, o app **mostra a zona de cada impacto mas NÃO soma os segundos
-de zona**, e exibe banner amarelo. O valor hipotético aparece em cinza ao lado,
-para você ver o que mudaria.
+**Os segundos de zona SÃO somados** (Z2 = +2 s, Z5 = +5 s, art. 3.4.1.b), e
+impacto que falta no Alvo ao fim da passagem vira **miss, +10 s cada**.
 
-Meça a coluna central no alvo oficial, digite em *Ajuste do alvo* e marque
-"confirmo" — aí a apuração fica completa.
+**O que NÃO está confirmado:** a **largura lateral da Zona Zero** não é legível
+na cota do Anexo I — o desenho oficial é vetorial no PDF e a medida não sai nem
+como texto nem como imagem extraível. O app usa uma estimativa de 150 mm (a
+largura da cabeça) e **avisa em amarelo**. Ajuste em *Ajuste do Alvo* quando
+medir no alvo oficial: um valor estimado com aviso é mais útil do que nenhuma
+conta.
+
+Dá para desligar a soma em *Ajuste do Alvo* — aí o app continua mostrando a zona
+de cada impacto, mas não a converte em segundos.
 
 ---
 
