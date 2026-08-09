@@ -1075,9 +1075,15 @@ const ALVO = {
     alturaTotal: 758.0,
     alturaCorpo: 608.0,
     cabeca: { largura: 150.0, altura: 150.0 },
-    chanfros: { ombro: 75.0, topo: 5.0 },
-    /* Somam exatamente a altura total: 480 + 126 + 152 = 758. Do topo para baixo. */
-    faixas: { Z0: 480.0, Z2: 126.0, Z5: 152.0 }
+    chanfros: { ombro: 75.0, topo: 5.0, base: 110.0 },
+    /* Alturas do desenho, do TOPO para baixo. Somam exatamente 758:
+       480 = a coluna da Zona Zero (150 mm de largura)
+       126 = da base da coluna até a base do octógono interno (Zona Dois)
+       152 = da base do octógono interno até a base do Alvo (Zona Cinco) */
+    faixas: { Z0: 480.0, Z2: 126.0, Z5: 152.0 },
+    /* Quanto o octógono da Zona Dois é recuado para dentro da silhueta.
+       As duas cotas de 75 mm do desenho (50 mm no reduzido = 2/3). */
+    recuoZ2: 75.0
   },
   /* art. 3.4.1.a.3 — 2/3 das dimensões do padrão */
   reduzido: {
@@ -1085,16 +1091,14 @@ const ALVO = {
     alturaTotal: 505.3333333333333,
     alturaCorpo: 405.3333333333333,
     cabeca: { largura: 100.0, altura: 100.0 },
-    chanfros: { ombro: 50.0, topo: 3.3333333333333335 },
-    faixas: { Z0: 320.0, Z2: 84.0, Z5: 101.33333333333333 }
+    chanfros: { ombro: 50.0, topo: 3.3333333333333335, base: 73.33333333333333 },
+    faixas: { Z0: 320.0, Z2: 84.0, Z5: 101.33333333333333 },
+    recuoZ2: 50.0
   },
-  /* A LARGURA LATERAL da Zona Zero não é legível na cota do Anexo I
-     renderizado — o valor abaixo é ESTIMADO (= largura da cabeça).
-     Os segundos de zona SÃO SOMADOS mesmo assim (art. 3.4.1.b): sem isso o app
-     não faz a conta que interessa, e um valor estimado com aviso é mais útil
-     do que nenhuma conta. Calibre pela foto do alvo oficial em "Ajuste do
-     Alvo" para tirar a estimativa do caminho. */
-  zonaZero: { larguraEstimada: 150.0, confirmado: true, calibrado: false },
+  /* CONFIRMADO no desenho do ANEXO I: a coluna da Zona Zero tem 150,00 mm de
+     largura no Alvo Padrão e 100,00 mm no Reduzido — a mesma largura da cabeça.
+     Não é mais estimativa. */
+  zonaZero: { larguraEstimada: 150.0, confirmado: true, calibrado: true },
   /* art. 3.4.1.b — o furo tem que caber inteiro dentro da Zona */
   calibres: {
     '.22 LR': 5.7, '.380 ACP': 9.0, '9x19mm': 9.0, '.38 Spl': 9.1,
@@ -1435,13 +1439,28 @@ const AlvoGeom = {
     const d = ALVO[tipo === 'reduzido' ? 'reduzido' : 'padrao'];
     const L = d.larguraCorpo, HC = d.alturaCorpo, HT = d.alturaTotal;
     const cl = d.cabeca.largura, om = d.chanfros.ombro, to = d.chanfros.topo;
+    const ba = d.chanfros.base;
     const cx = L / 2, ce = cx - cl / 2, cd = cx + cl / 2;
+    /* Octógono do corpo + cabeça/pescoço saindo por cima. Sentido anti-horário
+       a partir do canto inferior esquerdo do chanfro da base. */
     return [
-      [0, 0], [L, 0],
-      [L, HC - om], [L - om, HC],
+      [ba, 0], [L - ba, 0],
+      [L, ba], [L, HC - om], [L - om, HC],
       [cd, HC], [cd, HT - to], [cd - to, HT],
       [ce + to, HT], [ce, HT - to], [ce, HC],
-      [om, HC], [0, HC - om]
+      [om, HC], [0, HC - om], [0, ba]
+    ];
+  },
+
+  /* Só o corpo, sem cabeça: é ele que gera o octógono da Zona Dois. É convexo,
+     então o recuo de 75 mm sai exato por corte de semiplanos. */
+  corpo(tipo) {
+    const d = ALVO[tipo === 'reduzido' ? 'reduzido' : 'padrao'];
+    const L = d.larguraCorpo, HC = d.alturaCorpo;
+    const om = d.chanfros.ombro, ba = d.chanfros.base;
+    return [
+      [ba, 0], [L - ba, 0], [L, ba], [L, HC - om],
+      [L - om, HC], [om, HC], [0, HC - om], [0, ba]
     ];
   },
 
@@ -1449,68 +1468,100 @@ const AlvoGeom = {
      Devolve os limites em Y (de baixo para cima). */
   limitesFaixas(tipo) {
     const d = ALVO[tipo === 'reduzido' ? 'reduzido' : 'padrao'];
-    const yZ5 = d.faixas.Z5;                    // 152 — topo da faixa Z5
-    const yZ2 = d.faixas.Z5 + d.faixas.Z2;      // 278 — topo da faixa Z2
+    const yZ5 = d.faixas.Z5;                    // 152 — base do octógono da Zona Dois
+    const yZ2 = d.faixas.Z5 + d.faixas.Z2;      // 278 — base da coluna da Zona Zero
     return { yZ5, yZ2, topo: d.alturaTotal, dados: d };
   },
 
-  /* Modelo das Zonas: faixas horizontais confirmadas (480/126/152 do topo para
-     baixo) + coluna central da Zona Zero, cuja LARGURA é o único parâmetro não
-     confirmado no Anexo I renderizado.
-        Z0 = silhueta ∩ coluna central ∩ (y >= 278)
-        Z2 = silhueta ∩ (152 <= y < 278)  ∪  (silhueta ∩ y >= 278 fora da coluna)
-        Z5 = silhueta ∩ (y < 152)
-     Devolve listas de polígonos por zona (Z2 tem até 3 pedaços). */
+  /* Recua um polígono CONVEXO para dentro, cortando por semiplanos deslocados.
+     Exato para convexos — que é o caso do corpo do Alvo. */
+  recuar(poly, mm) {
+    let r = poly.slice();
+    const n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const a = poly[i], b = poly[(i + 1) % n];
+      let nx = -(b[1] - a[1]), ny = (b[0] - a[0]);
+      const len = Math.hypot(nx, ny) || 1;
+      nx /= len; ny /= len;
+      /* garante que a normal aponta para DENTRO (para o centroide) */
+      const cx = poly.reduce((s, p) => s + p[0], 0) / n;
+      const cy = poly.reduce((s, p) => s + p[1], 0) / n;
+      if (nx * (cx - a[0]) + ny * (cy - a[1]) < 0) { nx = -nx; ny = -ny; }
+      const c = -(nx * a[0] + ny * a[1]) - mm;
+      r = G.cortarSemiplano(r, nx, ny, c);
+      if (r.length < 3) return [];
+    }
+    return r;
+  },
+
+  /* ZONAS DO ALVO — ANEXO I do Regulamento LNTD 2025 (páginas 85-86).
+
+     São CONCÊNTRICAS, não faixas horizontais:
+
+       Zona Zero  coluna central de 150 mm de largura (100 no Reduzido), com
+                  480 mm de altura, do topo da cabeça até y = 278.
+       Zona Dois  octógono interno, recuado 75 mm da silhueta (50 no Reduzido)
+                  e com a base em y = 152, MENOS a coluna da Zona Zero.
+       Zona Cinco a margem entre esse octógono interno e a silhueta.
+
+     As três cotas verticais do desenho fecham a altura total:
+     480 + 126 + 152 = 758. */
   zonas(tipo, larguraZ0) {
     const sil = AlvoGeom.silhueta(tipo);
+    const corpo = AlvoGeom.corpo(tipo);
     const f = AlvoGeom.limitesFaixas(tipo);
-    const esc = (tipo === 'reduzido') ? 2 / 3 : 1;
-    const W0 = (larguraZ0 == null ? ALVO.zonaZero.larguraEstimada : larguraZ0) * esc;
-    const cx = f.dados.larguraCorpo / 2;
+    const d = f.dados;
+    const W0 = (larguraZ0 == null ? d.cabeca.largura : larguraZ0);
+    const cx = d.larguraCorpo / 2;
     const x0 = cx - W0 / 2, x1 = cx + W0 / 2;
 
-    const acima = G.cortarSemiplano(sil, 0, 1, -f.yZ2);              // y >= yZ2
-    const meio  = G.cortarSemiplano(G.cortarSemiplano(sil, 0, 1, -f.yZ5), 0, -1, f.yZ2);
-    const baixo = G.cortarSemiplano(sil, 0, -1, f.yZ5);              // y <= yZ5
+    /* Zona Zero: a coluna, cortada pela silhueta e limitada embaixo em yZ2. */
+    let Z0 = G.cortarSemiplano(sil, 0, 1, -f.yZ2);
+    Z0 = G.cortarSemiplano(Z0, 1, 0, -x0);
+    Z0 = G.cortarSemiplano(Z0, -1, 0, x1);
 
-    const Z0 = G.cortarSemiplano(G.cortarSemiplano(acima, 1, 0, -x0), -1, 0, x1);
-    const Z2esq = G.cortarSemiplano(acima, -1, 0, x0);
-    const Z2dir = G.cortarSemiplano(acima, 1, 0, -x1);
-
-    /* As divisórias verticais só existem onde há alvo dos DOIS lados delas. Se a
-       coluna da Zona Zero for tão larga quanto a cabeça, acima do corpo não há
-       papelão à esquerda de x0 nem à direita de x1 — ali o que existe é o
-       CONTORNO do alvo, e o contorno não é linha divisória de zona: um furo que
-       rompe a borda externa não vira Zona exterior (art. 3.4.1.b julga só as
-       linhas tracejadas entre Zonas). */
-    const bordaCabeca = f.dados.larguraCorpo / 2 - f.dados.cabeca.largura / 2;
-    const topoDivisoria = (x0 < bordaCabeca - 1e-6) ? f.dados.alturaTotal : f.dados.alturaCorpo;
+    /* Zona Dois: octógono interno = corpo recuado, com a base em yZ5. */
+    let interno = AlvoGeom.recuar(corpo, d.recuoZ2);
+    interno = G.cortarSemiplano(interno, 0, 1, -f.yZ5);
 
     const lista = (p) => (p && p.length >= 3 && G.areaPoligono(p) > 1) ? [p] : [];
+
+    /* As divisórias são as linhas TRACEJADAS do Alvo (art. 3.4.1): a borda da
+       coluna da Zona Zero e a borda do octógono interno. É delas que a regra da
+       linha do art. 3.4.1.b fala — o contorno externo do Alvo não é divisória. */
+    const divisorias = [];
+    const topoColuna = (x0 <= cx - d.cabeca.largura / 2 + 1e-6)
+      ? d.alturaTotal : d.alturaCorpo;
+    divisorias.push({ a: [x0, f.yZ2], b: [x1, f.yZ2], entre: ['Z0', 'Z2'] });
+    divisorias.push({ a: [x0, f.yZ2], b: [x0, topoColuna], entre: ['Z0', 'Z2'] });
+    divisorias.push({ a: [x1, f.yZ2], b: [x1, topoColuna], entre: ['Z0', 'Z2'] });
+    for (let i = 0; i < interno.length; i++) {
+      const a = interno[i], b = interno[(i + 1) % interno.length];
+      divisorias.push({ a, b, entre: ['Z2', 'Z5'] });
+    }
+
     return {
       Z0: lista(Z0),
-      Z2: [].concat(lista(meio), lista(Z2esq), lista(Z2dir)),
-      Z5: lista(baixo),
-      /* As LINHAS DIVISÓRIAS reais (pontilhadas, sem cor — art. 3.4.1). São elas
-         que a regra da linha julga: se o furo rompe uma delas, vale a exterior. */
-      divisorias: [
-        { a: [x0, f.yZ2], b: [x1, f.yZ2], entre: ['Z0', 'Z2'] },
-        { a: [x0, f.yZ2], b: [x0, topoDivisoria], entre: ['Z0', 'Z2'] },
-        { a: [x1, f.yZ2], b: [x1, topoDivisoria], entre: ['Z0', 'Z2'] },
-        { a: [0, f.yZ5],  b: [f.dados.larguraCorpo, f.yZ5], entre: ['Z2', 'Z5'] }
-      ],
-      params: { x0, x1, yZ2: f.yZ2, yZ5: f.yZ5, W0, sil }
+      /* Z2 e Z5 saem como REGIÕES, não como polígonos simples: quem decide a
+         zona de um ponto é o predicado abaixo, que é exato. Os polígonos aqui
+         servem ao desenho e à tarja. */
+      Z2: lista(interno),
+      Z5: lista(sil),
+      divisorias,
+      params: { x0, x1, yZ2: f.yZ2, yZ5: f.yZ5, W0, sil, corpo, interno, dados: d }
     };
   },
 
-  /* Zona de um PONTO (sem considerar o diâmetro do furo) */
+  /* Zona de um PONTO (sem considerar o diâmetro do furo). Concêntrico:
+     dentro da coluna e acima de yZ2 → Zona Zero;
+     senão, dentro do octógono interno → Zona Dois;
+     senão → Zona Cinco. */
   zonaDoPonto(z, uv) {
     const p = z.params;
-    if (uv[1] < p.yZ5) return 'Z5';
-    if (uv[1] < p.yZ2) return 'Z2';
-    return (uv[0] >= p.x0 && uv[0] <= p.x1) ? 'Z0' : 'Z2';
+    if (uv[1] >= p.yZ2 && uv[0] >= p.x0 && uv[0] <= p.x1) return 'Z0';
+    if (p.interno && p.interno.length >= 3 && G.pontoEmPoligono(p.interno, uv)) return 'Z2';
+    return 'Z5';
   },
-
   /* Zona do IMPACTO com a regra da linha (art. 3.4.1.b): o furo tem que caber
      inteiro na Zona; se romper a divisória e qualquer parte cair na Zona
      exterior, VALE A EXTERIOR. Como Z0 < Z2 < Z5 em segundos, "exterior" é o
@@ -1550,9 +1601,35 @@ const AlvoGeom = {
                                    : [[[L - larg, 0], [L, 0], [L, H], [L - larg, H]]];
     }
     if (t.cobre && t.cobre.length) {
-      let polys = [];
-      for (const nome of t.cobre) if (z[nome]) polys = polys.concat(z[nome]);
-      return polys;
+      /* As zonas são CONCÊNTRICAS (Anexo I): Z2 é o octógono interno e Z5 é a
+         margem entre ele e a silhueta — nenhuma das duas é um polígono solto
+         que se possa pintar direto. Pintar "todas as Zonas 2 e 5" é pintar a
+         silhueta INTEIRA MENOS a coluna da Zona Zero, que é exatamente o
+         terceiro exemplo de Alvo Tarjado do Anexo I: tudo preto menos a coluna
+         central. Sai em três pedaços limpos. */
+      const p2 = z.params;
+      const temZ2 = t.cobre.indexOf('Z2') >= 0, temZ5 = t.cobre.indexOf('Z5') >= 0;
+      const base = (temZ5 ? p2.sil : (p2.interno || p2.sil));
+      const pedacos = [];
+      if (temZ2 && temZ5) {
+        pedacos.push(G.cortarSemiplano(base, -1, 0, p2.x0));          // à esquerda da coluna
+        pedacos.push(G.cortarSemiplano(base, 1, 0, -p2.x1));          // à direita
+        pedacos.push(G.cortarSemiplano(base, 0, -1, p2.yZ2));         // abaixo da coluna
+      } else if (temZ2) {
+        const i2 = p2.interno || base;
+        pedacos.push(G.cortarSemiplano(i2, -1, 0, p2.x0));
+        pedacos.push(G.cortarSemiplano(i2, 1, 0, -p2.x1));
+        pedacos.push(G.cortarSemiplano(i2, 0, -1, p2.yZ2));
+      } else if (temZ5) {
+        /* só a margem: os quatro lados da silhueta fora do octógono interno */
+        const b = G.bbox(p2.interno || base);
+        pedacos.push(G.cortarSemiplano(p2.sil, -1, 0, b.x0));
+        pedacos.push(G.cortarSemiplano(p2.sil, 1, 0, -b.x1));
+        pedacos.push(G.cortarSemiplano(p2.sil, 0, -1, b.y0));
+        pedacos.push(G.cortarSemiplano(p2.sil, 0, 1, -b.y1));
+      }
+      if (t.cobre.indexOf('Z0') >= 0 && z.Z0) pedacos.push.apply(pedacos, z.Z0);
+      return pedacos.filter(q => q && q.length >= 3 && G.areaPoligono(q) > 1);
     }
     return [];
   },

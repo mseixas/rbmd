@@ -80,12 +80,37 @@ Por isso o raycast **não para no primeiro alvo**.
 
 ---
 
-## Zonas do Alvo — o que está confirmado e o que não está
+## Zonas do Alvo — ANEXO I, páginas 85-86
 
-Do **Anexo I** do Regulamento LNTD 2025, confirmados:
+As zonas são **concêntricas**, não faixas horizontais:
+
+| Zona | O que é | Segundos |
+|---|---|---|
+| **Zero** | a coluna central de **150 mm** de largura e **480 mm** de altura, do topo da cabeça até y = 278 | 0 |
+| **Dois** | o **octógono interno**, recuado **75 mm** da silhueta e com a base em y = 152, menos a coluna | **+2** |
+| **Cinco** | a **margem** entre esse octógono e a silhueta | **+5** |
+
+As três cotas verticais do desenho fecham a altura total: **480 + 126 + 152 = 758**.
 
 | | Padrão | Reduzido (2/3) |
 |---|---|---|
+| Largura do corpo | 450,00 mm | 300,00 mm |
+| Altura total | 758,00 mm | 505,33 mm |
+| Altura do corpo | 608,00 mm | 405,33 mm |
+| Cabeça / coluna da Zona Zero | 150,00 mm | 100,00 mm |
+| Coluna da Zona Zero (altura) | 480,00 mm | 320,00 mm |
+| Recuo do octógono da Zona Dois | 75,00 mm | 50,00 mm |
+| Base do octógono interno | 152,00 mm | 101,33 mm |
+
+Impacto que **falta** no Alvo ao fim da passagem conta como **miss, +10 s cada**.
+
+Isso também resolve a obs do croqui da Ficha de exemplo — *"a tarja preta
+vertical do A4 deverá cobrir todas as Zonas 2 e 5"*. Com zonas concêntricas,
+cobrir Z2 e Z5 é pintar **tudo menos a coluna central** — que é exatamente o
+terceiro exemplo de Alvo Tarjado do Anexo I. A "tarja vertical" do croqui é
+essa: sobra só a coluna.
+
+---|---|---|
 | Largura do corpo | 450,00 mm | 300,00 mm |
 | Altura total | 758,00 mm | 505,33 mm |
 | Altura do corpo | 608,00 mm | 405,33 mm |
