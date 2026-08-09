@@ -758,8 +758,8 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
         <input type="range" id="sl-z0" min="60" max="450" step="1" value="150"
                aria-label="Largura da Zona Zero em milímetros">
 
-        <label class="opcao"><input type="checkbox" id="chk-zonas">
-          medi na Ficha / no Alvo oficial e <strong>confirmo</strong> esta largura</label>
+        <label class="opcao"><input type="checkbox" id="chk-zonas" checked>
+          somar os segundos de zona na apuração (Z2 = +2 s · Z5 = +5 s, art. 3.4.1.b)</label>
 
         <label class="campo"><span>Tarja de A4 (art. 3.4.1.a.1)</span>
           <select id="sel-tarja">
@@ -880,6 +880,13 @@ input[type="range"] { width: 100%; accent-color: var(--ciano); margin: 2px 0 6px
         <select id="sel-sequencia">
           <option value="curta">curta — só o comando de espera</option>
           <option value="completa">completa — como na prova</option>
+        </select></label>
+      <label class="campo">Voz dos comandos
+        <select id="sel-modo-voz">
+          <option value="sinal">sinal sonoro &mdash; um toque distinto por comando</option>
+          <option value="sintetizada">voz sintetizada pelo app (rob&oacute;tica)</option>
+          <option value="navegador">voz do navegador (pode n&atilde;o tocar no XR)</option>
+          <option value="nenhuma">sem voz &mdash; s&oacute; o texto na tela</option>
         </select></label>
       <label class="campo campo--estreito">Volume
         <input type="range" id="in-volume" min="0" max="100" step="5" value="80"></label>
@@ -1081,11 +1088,13 @@ const ALVO = {
     chanfros: { ombro: 50.0, topo: 3.3333333333333335 },
     faixas: { Z0: 320.0, Z2: 84.0, Z5: 101.33333333333333 }
   },
-  /* A LARGURA LATERAL da Zona Zero não é legível na cota do Anexo I renderizado.
-     Valor abaixo é ESTIMADO (= largura da cabeça, herança do alvo clássico).
-     Enquanto `confirmado` for false o app MOSTRA a zona mas NÃO soma os segundos
-     de zona, e exibe banner amarelo. Ver §4.3 do PLANO. */
-  zonaZero: { larguraEstimada: 150.0, confirmado: false },
+  /* A LARGURA LATERAL da Zona Zero não é legível na cota do Anexo I
+     renderizado — o valor abaixo é ESTIMADO (= largura da cabeça).
+     Os segundos de zona SÃO SOMADOS mesmo assim (art. 3.4.1.b): sem isso o app
+     não faz a conta que interessa, e um valor estimado com aviso é mais útil
+     do que nenhuma conta. Calibre pela foto do alvo oficial em "Ajuste do
+     Alvo" para tirar a estimativa do caminho. */
+  zonaZero: { larguraEstimada: 150.0, confirmado: true, calibrado: false },
   /* art. 3.4.1.b — o furo tem que caber inteiro dentro da Zona */
   calibres: {
     '.22 LR': 5.7, '.380 ACP': 9.0, '9x19mm': 9.0, '.38 Spl': 9.1,
@@ -1661,7 +1670,7 @@ const CFG_PADRAO = {
   alturaTopoAlvo: 1.70,        // Online 2026 art. 4.2.2 — homem de estatura média
   rebaixamento: 0.30,          // alvos "baixos" ficam ~30 cm mais baixos
   larguraZ0: ALVO.zonaZero.larguraEstimada,
-  zonasConfirmadas: ALVO.zonaZero.confirmado,
+  zonasConfirmadas: true,        /* art. 3.4.1.b — Z2 = +2 s, Z5 = +5 s */
   preferirRetanguloTarja: false,
   coneEngajamento: 12,         // graus — cone de "disparo na direção do Alvo"
   omegaAssentamento: 30,       // °/s
@@ -1896,10 +1905,14 @@ const Pista = {
              'art. 3.4.4.a');
     } else ok(`Disparos necessários: ${nec} — confere com a Ficha.`);
 
-    if (!p.cfg.zonasConfirmadas) {
-      alerta('Os polígonos laterais das Zonas do Alvo não estão confirmados no Anexo I renderizado. ' +
-             'O app MOSTRA a zona de cada impacto mas NÃO soma os segundos de zona enquanto isso. ' +
-             'Calibre em "Ajuste do alvo" para liberar a apuração completa.', 'Anexo I');
+    if (p.cfg.zonasConfirmadas && !ALVO.zonaZero.calibrado) {
+      alerta('Os segundos de zona ESTÃO sendo somados (Z2 = +2 s, Z5 = +5 s), mas a largura ' +
+             'lateral da Zona Zero é ESTIMADA em ' + p.cfg.larguraZ0.toFixed(0) + ' mm — essa cota não é ' +
+             'legível no Anexo I renderizado. Calibre pela foto do alvo oficial em "Ajuste do Alvo" ' +
+             'para a apuração ficar exata.', 'art. 3.4.1.b / Anexo I');
+    } else if (!p.cfg.zonasConfirmadas) {
+      alerta('Soma dos segundos de zona DESLIGADA: o app mostra a zona de cada impacto mas não a ' +
+             'converte em segundos.', 'art. 3.4.1.b');
     }
     for (const c of (p.raw.aConferir || [])) alerta(c, 'a conferir na Ficha');
     return av;
@@ -7539,8 +7552,6 @@ const Som = {
   volume: 0.8,
   ligado: true,
   voz: true,
-  /* reserva do navegador: útil no desktop, não confiável dentro do XR */
-  vozDoNavegador: false,
   ultimaFala: '',
 
   /* Só pode nascer dentro de um gesto do usuário (art. do navegador, não do
@@ -7704,16 +7715,57 @@ const Som = {
      `speechSynthesis` do navegador fica só como reserva no desktop: dentro da
      sessão imersiva ele costuma não tocar, e nem sempre há voz instalada.
      De qualquer forma o texto está SEMPRE escrito, em tela cheia. */
+  /* SINAL SONORO: um motivo curto e distinto por comando, como um timer de
+     prova. É o padrão porque é o que soa LIMPO — síntese de formantes de frase
+     longa sai robótica demais para treino, e o `speechSynthesis` não é
+     confiável dentro da sessão imersiva. O comando está sempre escrito em tela
+     cheia; o som marca o ritmo, não carrega a informação. */
+  MOTIVOS: {
+    espera:  [[1320, 0.10], [0, 0.06], [1320, 0.10]],       // dois toques: prepara
+    abrir:   [[880, 0.09], [1170, 0.09]],                    // sobe: começou
+    preparar:[[660, 0.12], [880, 0.12], [1170, 0.16]],       // arpejo: prepare-se
+    pergunta:[[990, 0.10], [1320, 0.14]],                    // sobe no fim: pergunta
+    neutro:  [[880, 0.12]]
+  },
+
+  /* Qual motivo cada comando toca. Casado pelo TEXTO, nos três idiomas. */
+  motivoDe(texto) {
+    const t = String(texto || '').toUpperCase();
+    if (/STAND BY|A ESPERA|ATENCI/.test(t)) return 'espera';
+    if (/EYES AND EARS|ÓCULOS|OJOS/.test(t)) return 'abrir';
+    if (/RANGE IS HOT|PISTA QUENTE|PISTA CALIENTE/.test(t)) return 'abrir';
+    if (/MAKE READY|FIQUE PRONTO|PREP[ÁA]RESE/.test(t)) return 'preparar';
+    if (/READY\?|PRONTO\?|LISTO\?/.test(t)) return 'pergunta';
+    return 'neutro';
+  },
+
+  sinal(texto) {
+    const m = Som.MOTIVOS[Som.motivoDe(texto)] || Som.MOTIVOS.neutro;
+    let t = 0, ok = false;
+    for (const [f, d] of m) {
+      if (f > 0) ok = Som.tom(f, d, 'square', 0.45, t) || ok;
+      t += d;
+    }
+    return ok;
+  },
+
+  /* 'sinal' | 'sintetizada' | 'navegador' | 'nenhuma' */
+  modoVoz: 'sinal',
+
   falar(texto, lang) {
-    if (!Som.voz || !texto) return false;
+    if (!Som.voz || !texto || Som.modoVoz === 'nenhuma') return false;
     Som.ultimaFala = texto;
 
-    if (typeof Voz !== 'undefined' && Voz.pronta(texto) && Som.pronto()) {
+    if (Som.modoVoz === 'sinal') return Som.sinal(texto);
+
+    if (Som.modoVoz === 'sintetizada' && typeof Voz !== 'undefined' &&
+        Voz.pronta(texto) && Som.pronto()) {
       if (Voz.falar(texto, Som.ctx, Som.ganho, 1)) return true;
+      return Som.sinal(texto);                    // não renderizou: cai no sinal
     }
-    if (!Som.vozDoNavegador) return false;
+    if (Som.modoVoz !== 'navegador') return Som.sinal(texto);
     if (typeof speechSynthesis === 'undefined' ||
-        typeof SpeechSynthesisUtterance === 'undefined') return false;
+        typeof SpeechSynthesisUtterance === 'undefined') return Som.sinal(texto);
     try {
       const idioma = lang || Som.IDIOMAS[Som.idiomaValido(Som.idioma)].voz;
       const u = new SpeechSynthesisUtterance(texto);
@@ -7724,11 +7776,12 @@ const Som = {
       u.volume = Math.min(1, Som.volume);
       speechSynthesis.speak(u);
       return true;
-    } catch (e) { return false; }
+    } catch (e) { return Som.sinal(texto); }
   },
 
   /* Renderiza os comandos do idioma em buffer, antes da sessão abrir. */
   async prepararVoz(idioma) {
+    if (Som.modoVoz !== 'sintetizada') return false;   // só a síntese precisa de render
     if (typeof Voz === 'undefined') return false;
     Som.iniciar();
     if (!Som.ctx) return false;
@@ -8158,7 +8211,7 @@ const Arma = {
   /* Comprimento do cano por tipo (m), do punho à boca. Valores de arma real,
      para o comprimento aparente na mão bater com o que o Atleta conhece. */
   MEDIDAS: {
-    pistola:  { cano: 0.20, altura: 0.135, largura: 0.032 },
+    pistola:  { cano: 0.20, altura: 0.135, largura: 0.036 },
     revolver: { cano: 0.19, altura: 0.130, largura: 0.038 },
     carabina: { cano: 0.46, altura: 0.115, largura: 0.032 },
     fuzil:    { cano: 0.52, altura: 0.120, largura: 0.036 }
@@ -8208,94 +8261,133 @@ const Arma = {
     return m;
   },
 
-  /* --- PISTOLA: ferrolho, armação, punho inclinado, carregador, miras ----- */
+  /* --- PISTOLA -----------------------------------------------------------
+     Proporção de pistola de serviço moderna. Ferrolho com janela de ejeção e
+     serrilhado traseiro, armação com trilho, punho quadriculado, carregador
+     saindo pela base, aparelho de pontaria de três pontos. */
   _pistola(THREE, g) {
-    const met = Arma._mat(THREE, Arma.CORES.metal);
-    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.15);
-    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.2);
-    const d = Arma.MEDIDAS.pistola;
+    const met = Arma._mat(THREE, Arma.CORES.metal, 0.85);
+    const metC = Arma._mat(THREE, Arma.CORES.metalClaro, 0.9);
+    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.10);
+    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.1);
+    const L = 0.036;
 
-    g.add(Arma._caixa(THREE, d.largura, 0.030, d.cano, met, 0, 0.018, -d.cano / 2 + 0.02));
-    g.add(Arma._caixa(THREE, d.largura - 0.004, 0.026, d.cano * 0.80, pol, 0, -0.010, -d.cano * 0.40 + 0.02));
-    g.add(Arma._cilindro(THREE, 0.0045, 0.02, met, 0, 0.018, -d.cano + 0.018));   // boca
+    g.add(Arma._caixa(THREE, L, 0.034, 0.185, met, 0, 0.020, -0.072));
+    g.add(Arma._caixa(THREE, L - 0.008, 0.010, 0.185, metC, 0, 0.039, -0.072));
+    for (let i = 0; i < 4; i++) {
+      g.add(Arma._caixa(THREE, L + 0.001, 0.026, 0.004, metC, 0, 0.020, 0.004 - i * 0.009));
+    }
+    g.add(Arma._caixa(THREE, L + 0.002, 0.016, 0.040, pol, 0.002, 0.028, -0.052));
+    g.add(Arma._cilindro(THREE, 0.0062, 0.016, metC, 0, 0.020, -0.166));
+    g.add(Arma._cilindro(THREE, 0.0042, 0.020, pol, 0, 0.020, -0.170));
 
-    /* punho: inclinado ~18° para trás, como o de uma pistola de serviço */
-    const punho = Arma._caixa(THREE, d.largura - 0.004, 0.105, 0.038, pol, 0, -0.070, 0.012);
-    punho.rotation.x = -0.31;
+    g.add(Arma._caixa(THREE, L - 0.002, 0.026, 0.120, pol, 0, -0.002, -0.048));
+    g.add(Arma._caixa(THREE, 0.020, 0.008, 0.062, pol, 0, -0.017, -0.078));
+    g.add(Arma._caixa(THREE, 0.008, 0.016, 0.012, metC, 0, -0.006, -0.014));
+
+    const punho = new THREE.Group();
+    punho.add(Arma._caixa(THREE, L - 0.004, 0.108, 0.036, pol, 0, -0.058, 0.006));
+    for (let i = 0; i < 5; i++) {
+      punho.add(Arma._caixa(THREE, L - 0.001, 0.004, 0.030, met, 0, -0.024 - i * 0.017, 0.006));
+    }
+    punho.add(Arma._caixa(THREE, L - 0.006, 0.012, 0.034, metC, 0, -0.116, 0.008));
+    punho.rotation.x = -0.30;
     g.add(punho);
-    const carr = Arma._caixa(THREE, d.largura - 0.010, 0.030, 0.026, met, 0, -0.126, 0.030);
-    carr.rotation.x = -0.31;
-    g.add(carr);
 
-    /* guarda-mato */
-    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.021, 0.0042, 8, 16, Math.PI * 1.25), pol);
-    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
-    gm.position.set(0, -0.030, -0.020);
-    g.add(gm);
+    g.add(Arma._caixa(THREE, L - 0.008, 0.005, 0.040, pol, 0, -0.038, -0.020));
+    g.add(Arma._caixa(THREE, L - 0.008, 0.022, 0.005, pol, 0, -0.027, -0.040));
 
-    /* aparelho de pontaria — referência visual, não mira de verdade */
-    g.add(Arma._caixa(THREE, 0.004, 0.007, 0.004, mira, 0, 0.036, -d.cano + 0.030));
-    g.add(Arma._caixa(THREE, 0.016, 0.006, 0.005, mira, 0, 0.036, -0.012));
+    g.add(Arma._caixa(THREE, 0.005, 0.008, 0.005, mira, 0, 0.042, -0.158));
+    g.add(Arma._caixa(THREE, 0.020, 0.008, 0.006, mira, 0, 0.042, 0.012));
     return g;
   },
 
-  /* --- REVÓLVER: tambor, cano, punho de madeira -------------------------- */
+  /* --- REVÓLVER ----------------------------------------------------------
+     Cano com trilho ventilado, tambor de seis câmaras marcadas, cão exposto e
+     punho de madeira. */
   _revolver(THREE, g) {
-    const met = Arma._mat(THREE, Arma.CORES.metalClaro, 0.8);
-    const mad = Arma._mat(THREE, Arma.CORES.madeira, 0.05);
-    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.2);
-    const d = Arma.MEDIDAS.revolver;
+    const met = Arma._mat(THREE, Arma.CORES.metalClaro, 0.9);
+    const metE = Arma._mat(THREE, Arma.CORES.metal, 0.85);
+    const mad = Arma._mat(THREE, Arma.CORES.madeira, 0.02);
+    const mira = Arma._mat(THREE, Arma.CORES.mira, 0.1);
 
-    g.add(Arma._cilindro(THREE, 0.011, d.cano * 0.78, met, 0, 0.020, -d.cano * 0.55));
-    g.add(Arma._caixa(THREE, 0.012, 0.014, d.cano * 0.60, met, 0, 0.032, -d.cano * 0.45));  // trilho
-    g.add(Arma._cilindro(THREE, 0.021, 0.042, met, 0, 0.014, -0.030));                       // tambor
-    g.add(Arma._caixa(THREE, 0.016, 0.048, 0.055, met, 0, 0.000, 0.005));                    // armação
+    g.add(Arma._cilindro(THREE, 0.0115, 0.120, met, 0, 0.020, -0.090));
+    g.add(Arma._caixa(THREE, 0.014, 0.012, 0.118, met, 0, 0.034, -0.090));
+    for (let i = 0; i < 5; i++) {
+      g.add(Arma._caixa(THREE, 0.015, 0.013, 0.005, metE, 0, 0.034, -0.140 + i * 0.022));
+    }
+    g.add(Arma._caixa(THREE, 0.016, 0.014, 0.110, met, 0, 0.006, -0.086));
 
-    const punho = Arma._caixa(THREE, 0.030, 0.100, 0.040, mad, 0, -0.062, 0.020);
-    punho.rotation.x = -0.36;
+    g.add(Arma._cilindro(THREE, 0.0215, 0.044, met, 0, 0.014, -0.026));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.add(Arma._cilindro(THREE, 0.0042, 0.046, metE,
+        Math.cos(a) * 0.0135, 0.014 + Math.sin(a) * 0.0135, -0.026));
+    }
+
+    g.add(Arma._caixa(THREE, 0.018, 0.052, 0.058, met, 0, -0.004, 0.010));
+    g.add(Arma._caixa(THREE, 0.012, 0.018, 0.014, metE, 0, 0.030, 0.034));
+    g.add(Arma._caixa(THREE, 0.008, 0.018, 0.010, metE, 0, -0.014, -0.008));
+
+    const punho = new THREE.Group();
+    punho.add(Arma._caixa(THREE, 0.034, 0.098, 0.044, mad, 0, -0.056, 0.016));
+    punho.add(Arma._caixa(THREE, 0.036, 0.030, 0.040, mad, 0, -0.100, 0.020));
+    punho.rotation.x = -0.34;
     g.add(punho);
 
-    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.020, 0.0040, 8, 16, Math.PI * 1.25), met);
-    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
-    gm.position.set(0, -0.026, -0.006);
-    g.add(gm);
-
-    g.add(Arma._caixa(THREE, 0.004, 0.008, 0.004, mira, 0, 0.042, -d.cano * 0.90));
+    g.add(Arma._caixa(THREE, 0.014, 0.005, 0.040, met, 0, -0.036, -0.014));
+    g.add(Arma._caixa(THREE, 0.014, 0.020, 0.005, met, 0, -0.026, -0.032));
+    g.add(Arma._caixa(THREE, 0.005, 0.009, 0.005, mira, 0, 0.044, -0.146));
     return g;
   },
 
-  /* --- LONGAS: cano, guarda-mão, coronha atrás da mão, óptica ------------ */
+  /* --- LONGAS ------------------------------------------------------------
+     Guarda-mão com trilho, caixa da culatra, coronha retrátil ATRÁS da mão (é
+     ela que dá a sensação de arma longa), punho-pistola, carregador curvo em
+     dois blocos e óptica tubular sobre montagem alta. */
   _longa(THREE, g, tipo) {
-    const met = Arma._mat(THREE, Arma.CORES.metal);
-    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.15);
-    const opt = Arma._mat(THREE, Arma.CORES.optica, 0.3);
+    const met = Arma._mat(THREE, Arma.CORES.metal, 0.85);
+    const metC = Arma._mat(THREE, Arma.CORES.metalClaro, 0.9);
+    const pol = Arma._mat(THREE, Arma.CORES.polimero, 0.10);
+    const opt = Arma._mat(THREE, Arma.CORES.optica, 0.25);
     const d = Arma.MEDIDAS[tipo] || Arma.MEDIDAS.carabina;
+    const cano = d.cano;
 
-    g.add(Arma._cilindro(THREE, 0.0085, d.cano * 0.62, met, 0, 0.022, -d.cano * 0.62));
-    g.add(Arma._caixa(THREE, 0.034, 0.034, d.cano * 0.40, pol, 0, 0.020, -d.cano * 0.32));   // guarda-mão
-    g.add(Arma._caixa(THREE, 0.036, 0.048, 0.150, met, 0, 0.014, -0.030));                    // caixa da culatra
+    g.add(Arma._cilindro(THREE, 0.0088, cano * 0.50, metC, 0, 0.022, -cano * 0.70));
+    g.add(Arma._cilindro(THREE, 0.0125, 0.036, met, 0, 0.022, -cano * 0.96));
+    g.add(Arma._caixa(THREE, 0.030, 0.010, 0.030, met, 0, 0.040, -cano * 0.52));
 
-    /* a coronha fica ATRÁS da mão: é o que dá a sensação de arma longa */
-    g.add(Arma._caixa(THREE, 0.030, 0.044, 0.130, pol, 0, 0.006, 0.115));
-    g.add(Arma._caixa(THREE, 0.026, 0.030, 0.060, pol, 0, -0.014, 0.052));
+    g.add(Arma._caixa(THREE, 0.038, 0.040, cano * 0.44, pol, 0, 0.020, -cano * 0.36));
+    g.add(Arma._caixa(THREE, 0.024, 0.008, cano * 0.44, met, 0, 0.042, -cano * 0.36));
+    for (let i = 0; i < 6; i++) {
+      g.add(Arma._caixa(THREE, 0.040, 0.006, 0.010, met, 0, 0.020, -cano * 0.55 + i * cano * 0.075));
+    }
 
-    const punho = Arma._caixa(THREE, 0.028, 0.078, 0.034, pol, 0, -0.052, 0.020);
-    punho.rotation.x = -0.28;
+    g.add(Arma._caixa(THREE, 0.038, 0.052, 0.150, met, 0, 0.014, -0.032));
+    g.add(Arma._caixa(THREE, 0.040, 0.014, 0.070, metC, 0, 0.040, -0.020));
+    g.add(Arma._caixa(THREE, 0.010, 0.016, 0.020, metC, 0.022, 0.026, 0.020));
+
+    g.add(Arma._caixa(THREE, 0.022, 0.026, 0.100, met, 0, 0.010, 0.096));
+    g.add(Arma._caixa(THREE, 0.034, 0.052, 0.090, pol, 0, 0.004, 0.150));
+    g.add(Arma._caixa(THREE, 0.036, 0.070, 0.016, pol, 0, -0.004, 0.192));
+
+    const punho = Arma._caixa(THREE, 0.030, 0.084, 0.036, pol, 0, -0.052, 0.030);
+    punho.rotation.x = -0.26;
     g.add(punho);
 
-    const carr = Arma._caixa(THREE, 0.026, 0.090, 0.030, met, 0, -0.058, -0.028);
-    carr.rotation.x = 0.12;
-    g.add(carr);
+    const c1 = Arma._caixa(THREE, 0.026, 0.070, 0.030, met, 0, -0.048, -0.030);
+    c1.rotation.x = 0.10; g.add(c1);
+    const c2 = Arma._caixa(THREE, 0.026, 0.060, 0.028, met, 0, -0.104, -0.014);
+    c2.rotation.x = 0.28; g.add(c2);
 
-    /* óptica: as Divisões de Carabina e Fuzil são todas "Óptica" (art. 5.1) */
-    g.add(Arma._cilindro(THREE, 0.017, 0.110, opt, 0, 0.060, -0.055));
-    g.add(Arma._caixa(THREE, 0.012, 0.020, 0.014, met, 0, 0.046, -0.020));
-    g.add(Arma._caixa(THREE, 0.012, 0.020, 0.014, met, 0, 0.046, -0.090));
+    g.add(Arma._cilindro(THREE, 0.018, 0.120, opt, 0, 0.066, -0.050));
+    g.add(Arma._cilindro(THREE, 0.022, 0.028, opt, 0, 0.066, -0.104));
+    g.add(Arma._cilindro(THREE, 0.021, 0.024, opt, 0, 0.066, 0.002));
+    g.add(Arma._caixa(THREE, 0.016, 0.026, 0.016, met, 0, 0.052, -0.016));
+    g.add(Arma._caixa(THREE, 0.016, 0.026, 0.016, met, 0, 0.052, -0.086));
 
-    const gm = new THREE.Mesh(new THREE.TorusGeometry(0.020, 0.0040, 8, 16, Math.PI * 1.25), pol);
-    gm.rotation.y = Math.PI / 2; gm.rotation.z = -0.5;
-    gm.position.set(0, -0.020, -0.004);
-    g.add(gm);
+    g.add(Arma._caixa(THREE, 0.024, 0.005, 0.044, pol, 0, -0.020, -0.006));
+    g.add(Arma._caixa(THREE, 0.024, 0.020, 0.005, pol, 0, -0.010, -0.026));
     return g;
   },
 
@@ -12109,6 +12201,7 @@ const XR = {
       Som.idioma = Som.idiomaValido(cfg.som.idioma);
       Som.ligado = cfg.som.som !== false;
       Som.voz = cfg.som.voz !== false;
+      if (cfg.som.modoVoz) Som.modoVoz = cfg.som.modoVoz;
       if (typeof cfg.som.volume === 'number') Som.volume = cfg.som.volume;
       if (typeof Vibra !== 'undefined') Vibra.ligado = cfg.som.vibracao !== false;
       if (Som.ganho) { try { Som.ganho.gain.value = Som.volume; } catch (e) { /* nada */ } }
@@ -15247,7 +15340,7 @@ const ConfigSom = {
   iniciar() {
     if (typeof document === 'undefined') return;
     for (const id of ['sel-idioma-comandos', 'sel-sequencia', 'in-volume',
-                      'chk-som', 'chk-voz', 'chk-vibracao', 'sel-ambiente']) {
+                      'chk-som', 'chk-voz', 'chk-vibracao', 'sel-ambiente', 'sel-modo-voz']) {
       const e = ConfigSom.el(id);
       if (e) e.addEventListener('change', () => ConfigSom.aplicar());
       if (e && id === 'in-volume') e.addEventListener('input', () => ConfigSom.aplicar());
@@ -15295,6 +15388,7 @@ const ConfigSom = {
       volume: (isFinite(n) ? n : 80) / 100,
       som: mar('chk-som', true),
       voz: mar('chk-voz', true),
+      modoVoz: val('sel-modo-voz', 'sinal'),
       vibracao: mar('chk-vibracao', true),
       /* 'passthrough' = a Pista dentro do cômodo · 'imersivo' = VR pura */
       ambiente: val('sel-ambiente', 'passthrough') === 'imersivo' ? 'imersivo' : 'passthrough'
@@ -15307,6 +15401,7 @@ const ConfigSom = {
     Som.idioma = c.idioma;
     Som.ligado = c.som;
     Som.voz = c.voz;
+    Som.modoVoz = c.modoVoz || 'sinal';
     Som.volume = c.volume;
     if (Som.ganho) { try { Som.ganho.gain.value = c.volume; } catch (e) { /* nada */ } }
     if (typeof Vibra !== 'undefined') Vibra.ligado = c.vibracao;
@@ -15327,7 +15422,7 @@ const ConfigSom = {
         ? 'voz pré-sintetizada pronta — toca no mesmo grafo do estampido'
         : 'voz sintetizada ao abrir a sessão');
     }
-    e.className = 'nota' + (!c.voz ? ' nota--alerta' : '');
+    e.className = 'nota' + ((!c.voz || c.modoVoz === 'navegador') ? ' nota--alerta' : '');
     e.textContent = partes.join(' · ');
   }
 };
